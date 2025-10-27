@@ -1,0 +1,73 @@
+1) CARLA version 0.9.15
+2) Installed the Build version first, then resorted back to package installation due to simplicity. Do not waste time trying to build from source on Windows. It is much easier on Ubuntu. If the requirements are to create new assets or maps, then only choose the build version, else the packaged installation is good enough (this works on both Windows and Ubuntu).
+3) Use Python 3.10.16
+
+Procedures:
+1) Install Miniconda (or Anaconda, but Miniconda is more lighter) (any version supporting Python 3.10.16 will do). In this case, Miniconda 25.1.1 was used (Can choose between single user or for all users installation, for this project, for all was used, recommended and default installation options).
+2) Remember to always use Anaconda prompt (https://stackoverflow.com/questions/78886970/how-to-add-anaconda-prompt-option-to-windows-terminal)
+	Adds Anaconda Prompt to the Windows CMD (to simplify operations)
+3) Install IDE (any, in this case VS Code, default and recommended options).
+4) Create Folder Structure to differentiate between Server and Client
+5) Download CARLA package installation as per instructions and unzip the folders (use WinRAR or any other program rather the default Windows service as these programs are faster).
+6) Run script start_server.ps1 to ensure the server loads perfectly.
+7) Open Anaconda Prompt
+	Navigate to client folder
+		Create new conda prefix env with python=3.10.16
+		Install required libraries
+		Make sure interpreter is set to conda python environment
+8) Check out the examples script in server\WindowsNoEditor\PythonAPI\examples
+	Make sure the server is running first
+	Run each python script in a new terminal instance
+		Run dynamic_weather.py + generate_traffic.py + manual_control.py
+9) Save all new custom scripts under client\src
+
+Note:
+1) Make sure the integrated graphics does not interfere with CARLA loading into the discrete GPU. Else CARLA loads into the integrated GPU which will then cause the simulation to crash.
+	Check if MUX switch is available and activate accordingly.
+	Disable Microsoft Hybrid Graphics Mode and make sure the discrete GPU gets the higher priority.
+	Add "-prefernvidia" argument while running the server script.
+	Use "Opt" versions of the maps rather than the regular versions.
+	Make sure that the server uses the discrete GPU by default (Windows Settings->System->Display->Graphics->Custom settings for applications->Add desktop app)
+2)	Use the PythonAPI\util\config.py file to switch maps rather than using the client custom script.
+3)	When setting into synchronous mode, before terminating the client, do not forget to reset back to asynchronous else the server spectator will freeze due to no ticks from the client.
+4)	If the actor cannot be placed due to a collision, offset the location of the actor (typically Z axis and either X or Y accordingly) and see if that resolves the issue.
+5)	If passing the sensors into a class, then you need to handle the circular reference problem, so you need to pass the lambda as a weak reference. Check CARLA_0.9.15\server\WindowsNoEditor\PythonAPI\examples\manual_control.py for the solution.
+6)	For the sensors, do not bother using the sensor_tick attribute as it does not work as intended always. Instead using a sampling rate based on the event frames.
+7)	When running the Basic Agent and Behaviour Agent scripts, make sure to append the full path of the file programmatically through sys.path.append(r"C:\file path..."), until the PythonAPI\carla folder.
+8)	In the Basic Agent script attempt (tutorial_03.py), initially the cars are just circling around, and do not start from the specified start point. Instead, they try to make a straight line dash to the origin of the map and begin navigating from there. To debug the issue, draw the waypoints to visualize the route taken by the route planner. Furthermore, running the debugger reveals that the origin of the route is set as none, and the Basic Agent cannot infer it from the vehicle, since the vehicle did not spawn yet. This could be due to issues with the synchronicity between the client and the server. A rudimentary solution would be to set it to asynchronous mode, which temporarily solves the problem, but would be undesirable, especially when sensors are involved. A more feasible solution would be to always tick the world AFTER spawning (all actors) but BEFORE planning, which ensures that the destination setting and agent initialization come after at least one tick. Refer to the github link  (https://github.com/carla-simulator/carla/issues/2634) for more reference.
+9)	Note that the Traffic Manager (TM) sometimes deletes actors (vehicles) due to their vehicle elimination policy (noticeable when large number of traffic vehicles are spawned) to prevent blocking traffic flow altogether. Refer to the following links: (https://github.com/carla-simulator/carla/issues/3860) and (https://github.com/carla-simulator/carla/issues/5739). Furthermore, when upon vehicle-pedestrian collision as well (or even upon any pedestrians blocking up the way on the road as well), the pedestrians appear to be removed (from the view and even from the world) so that the vehicle(s) can proceed forward. This leads to issues upon finally deleting the actors as the ACTOR_LIST which contains ids of actors which are not available currently in the world, leading to deletion errors when trying to delete actors not present in the world or possible memory leaks. Modifying the source files to stop the automated removal of the actors in such situations is one possible way as suggested in the links but this is not a guaranteed and viable solution. Instead, a more refined deletion cleanup function is required which first gets all the actors currently present in the world at the simulation end, and the deletes the corresponding desired actors.
+10)	The backward vector in carla.Rotation is the negation of the forward vector. Similarly, the left vector is the negation of the right vector.
+11) After installing scikit-fuzzy version 0.5.0 via pip, a small change needs to be made in the skfuzzy/control/visualization.py file. The line 182 (self.ctrl = control_system) needs to have its indentation removed. This is due to discrepancies between the pip version and the github version of the file as highlighted in the following links: (https://github.com/scikit-fuzzy/scikit-fuzzy/issues/333) with the corresponding changes being made in the following commit (https://github.com/scikit-fuzzy/scikit-fuzzy/commit/be7e344f3ce65845e39922aa5fc1af7412d01944).
+12) Use VeraCrypt to create a private volume to store the files and then create a symbolic link in Windows to the private volume.
+	Create the VeraCrypt private volume and mount it to any drive (in this case Z:\).
+	Open CMD (Administrator) and type [mountvol] (no square brackets) and copy the mounted Z: volume number.
+		Alternatively you can use the mounted drive letter as well but using the volume number is a more robust approach.
+	Then type [mklink /D "C:\Users\Eng05\Desktop\CARLA_0.9.15\client" "\\?\Volume{40eba527-a516-11f0-b45a-0468749f7616}\client"] (no square brackets).
+	Now the client files can be accessed from the mounted Z: drive through the symbolic link in the C Drive as usual.
+	To remove the link, type [rmdir "C:\Users\Eng05\Desktop\CARLA_0.9.15\client"] (no square brackets).
+	Remember to unmount the volume after every session.
+13) While working with GitHub, the cleanest approach would be to open the Z:\ Drive client folder as a separate workspace and initialize the git repo there and push from the Z:\ Drive. If you try to push from the C:\ Drive, you will be committing the symbolic links only.
+	The C:\ Drive symbolic link is for working with Windows.
+	The Z:\ Drive workspace folder is for working with GitHub.
+14) To make the client wait for a server tick (useful for stabilizing the environment):
+    world.wait_for_tick() -> asynchronous mode
+	world.tick() -> synchronous mode
+15) Changing the Default Map (Optional): By default, CARLA loads Town10HD_Opt, which is large and resource-intensive. If you have limited resources, consider switching to a lighter map like Town02, or any other of your choice.
+	Edit Configuration File: Open Unreal\CarlaUE4\Config\DefaultEngine.ini in a text editor.
+	Open (C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor\CarlaUE4\Config\DefaultEngine.ini)
+	Modify Map Settings to load Town02 by default (for example)
+		Replace the map settings with the following:
+
+		[/Script/EngineSettings.GameMapsSettings]
+		EditorStartupMap=/Game/Carla/Maps/Town02.Town02
+		GameDefaultMap=/Game/Carla/Maps/Town02.Town02
+		ServerDefaultMap=/Game/Carla/Maps/Town02.Town02
+		GlobalDefaultGameMode=/Game/Carla/Blueprints/Game/CarlaGameMode.CarlaGameMode_C
+		GameInstanceClass=/Script/Carla.CarlaGameInstance
+		TransitionMap=/Game/Carla/Maps/Town02.Town02
+		GlobalDefaultServerGameMode=/Game/Carla/Blueprints/Game/Carl
+16)
+
+
+
+

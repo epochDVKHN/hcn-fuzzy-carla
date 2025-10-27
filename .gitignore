@@ -1,0 +1,26 @@
+# .gitignore — Rules for Python and CARLA project-specific directories
+
+# Python environments
+/env/
+*.conda
+
+# Python cache & build files
+__pycache__/
+*.egg-info/
+*.egg
+
+# Editor folders
+/.vscode/
+
+# Any temporary or log files
+*.log
+*.tmp
+
+# ----------------------------------------------------
+# Project-Specific Ignores
+# ----------------------------------------------------
+/src/_archive/
+/src/thesis/data/
+/src/thesis/results/
+/src/thesis/report/
+
