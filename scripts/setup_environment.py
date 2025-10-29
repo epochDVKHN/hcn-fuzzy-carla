@@ -1,13 +1,12 @@
 """_summary_
-    setup_environment.py
+setup_environment.py
 
-    Initializes the CARLA simulation environment.
+Initializes the CARLA simulation environment.
 
-    Connects to the local CARLA server, loads a specified map, stabilizes the world,
-    and applies predefined weather parameters.
+Connects to the local CARLA server, loads a specified map, stabilizes the world, and applies predefined weather parameters.
 
-    Usage:
-        Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
+Usage:
+	Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
 """
 
 import logging
