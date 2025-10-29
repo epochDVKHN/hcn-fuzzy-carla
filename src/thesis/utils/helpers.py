@@ -4,10 +4,11 @@ from typing import List
 
 import carla
 
-# Add CARLA agents path
+# NOTE: UPDATE the path below to YOUR CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
 sys.path.append(
     r"C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor\PythonAPI\carla"
 )
+
 from agents.navigation.basic_agent import BasicAgent
 from agents.tools.misc import compute_distance
 
@@ -58,7 +59,7 @@ def actor_cleanup(world: carla.World) -> None:
     # Categorize actors by type for structured cleanup
     actor_controller = all_actors.filter("controller.*")
     actor_sensor = all_actors.filter("sensor.*")
-    actor_static = all_actors.filter("static.*")
+    # actor_static = all_actors.filter("static.*")
     actor_vehicle = all_actors.filter("vehicle.*")
     actor_walker = all_actors.filter("walker.*")
 
@@ -78,11 +79,12 @@ def actor_cleanup(world: carla.World) -> None:
                     sensor.stop()  # Stop active sensors before destruction
                 safe_destroy(sensor)
 
-    if actor_static:
-        logging.debug(f"Destroying {len(actor_static)} Props.")
-        for static in actor_static:
-            if static.is_alive:
-                safe_destroy(static)
+    # Uncomment to remove all static props (including default CARLA map assets); this affects visuals only.
+    # if actor_static:
+    #     logging.debug(f"Destroying {len(actor_static)} Props.")
+    #     for static in actor_static:
+    #         if static.is_alive:
+    #             safe_destroy(static)
 
     if actor_vehicle:
         logging.debug(f"Destroying {len(actor_vehicle)} Vehicles.")
@@ -95,8 +97,6 @@ def actor_cleanup(world: carla.World) -> None:
         for walker in actor_walker:
             if walker.is_alive:
                 safe_destroy(walker)
-
-    logging.info("World cleanup completed. All actors destroyed.")
 
 
 def get_route_length(agent: BasicAgent) -> float:
