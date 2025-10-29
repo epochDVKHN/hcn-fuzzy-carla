@@ -1,12 +1,13 @@
 """_summary_
     setup_environment.py
 
-Purpose:
-    Connects to the localhost CARLA server, loads a specific map, stabilizes the environment,
-    and sets predefined weather parameters.
+    Initializes the CARLA simulation environment.
 
-Usage:
-    Run this script directly (or from `client\scripts\launch_world.ps1`) to initialize the CARLA environment.
+    Connects to the local CARLA server, loads a specified map, stabilizes the world,
+    and applies predefined weather parameters.
+
+    Usage:
+        Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
 """
 
 import logging
@@ -18,10 +19,13 @@ import carla
 
 def main():
     """
-    Set up the CARLA environment by connecting to the server, loading the specified map and applying weather parameters.
+    Initialize the CARLA simulation environment.
+
+    Connects to the CARLA server, loads the specified map, and applies predefined
+    weather parameters to set up the simulation world.
 
     Raises:
-        Exception: If an unhandled exception occurs during execution.
+        Exception: If any unhandled error occurs during setup.
     """
     HOST = "localhost"
     PORT = 2000
@@ -36,13 +40,13 @@ def main():
         world = client.load_world(
             map_name=WORLD_MAP, reset_settings=True, map_layers=carla.MapLayer.All
         )
-        logging.info(str(WORLD_MAP) + " loaded.")
+        logging.info(f"{WORLD_MAP} loaded.")
 
-        # Let the environment tick to stabilize
+        # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
             world.wait_for_tick()
 
-        # Define the weather parameters
+        # Configure weather parameters for environmental realism
         weather = carla.WeatherParameters(
             cloudiness=30.0,
             precipitation=0.0,
@@ -63,7 +67,7 @@ def main():
         world.set_weather(weather)
         logging.info("Weather updated.")
 
-        # Let the environment tick to stabilize
+        # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
             world.wait_for_tick()
 
@@ -71,12 +75,11 @@ def main():
         logging.critical("An unhandled exception occurred!", exc_info=True)
     finally:
         time.sleep(0.5)
-        logging.info("Done.\n")
+        logging.info("Setup complete.\n")
 
 
 # Entry point: configure logging and run environment setup
 if __name__ == "__main__":
-    # Set up logging configurations
     logging.basicConfig(
         level=logging.INFO,
         format="{asctime} | {levelname:<8} | {name} | {message}",
@@ -86,5 +89,4 @@ if __name__ == "__main__":
         force=True,
     )
 
-    # Run game loop
     main()

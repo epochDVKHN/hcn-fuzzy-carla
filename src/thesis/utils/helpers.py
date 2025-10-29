@@ -1,5 +1,6 @@
 import logging
 import sys
+from typing import List
 
 import carla
 
@@ -13,37 +14,34 @@ from agents.tools.misc import compute_distance
 
 def actor_cleanup(world: carla.World) -> None:
     """
-    Destroy all active actors in the CARLA world in a safe and controlled manner.
+    Safely destroy all active actors in the CARLA world.
 
-    This function retrieves all actors currently present in the world and
-    attempts to destroy them by category. It ensures proper shutdown of
-    controllers and sensors before destruction to avoid runtime conflicts
-    or dangling references.
+    Actors are destroyed by category to ensure proper shutdown of controllers
+    and sensors before removal, avoiding runtime errors or dangling references.
 
-    Categories handled:
-        - controller.*  : Walker AI controllers (stopped before destruction)
-        - sensor.*      : Sensors (stopped if actively listening)
-        - static.*      : Static props or decorations
-        - vehicle.*     : Vehicles (all types)
-        - walker.*      : Pedestrians
+    Handled categories:
+        - controller.* : Walker AI controllers (stopped before destruction)
+        - sensor.*     : Sensors (stopped if listening)
+        - static.*     : Static props
+        - vehicle.*    : Vehicles
+        - walker.*     : Pedestrians
 
-    :param world: The CARLA world instance from which actors will be destroyed.
-    :type world: carla.World
-    :return: None
+    Args:
+        world (carla.World): The CARLA world containing the actors.
+
+    Returns:
+        None
     """
 
     def safe_destroy(actor: carla.Actor) -> None:
         """
-        Attempt to safely destroy an actor while handling common runtime errors.
+        Safely destroy an actor while handling runtime errors.
 
-        This function checks if the actor is still alive and then tries to destroy it.
-        If a RuntimeError occurs (e.g., the actor is being destroyed concurrently
-        or still in use by another process), the exception is caught and logged
-        without interrupting the cleanup process.
+        Args:
+            actor (carla.Actor): The actor to destroy.
 
-        :param actor: The CARLA actor instance to destroy.
-        :type actor: carla.Actor
-        :return: None
+        Returns:
+            None
         """
         if actor.is_alive:
             try:
@@ -103,26 +101,47 @@ def actor_cleanup(world: carla.World) -> None:
 
 def get_route_length(agent: BasicAgent) -> float:
     """
-    Compute the total length of the planned route for a given agent.
+    Calculate the total length of an agent's planned route.
 
-    The route is obtained from the agent's local planner and is expected to be a sequence
-    of (Waypoint, RoadOption) pairs. The total length is calculated by summing the
-    Euclidean distances between consecutive waypoint locations along the route.
+    The route is obtained from the agent's local planner as a list of
+    (Waypoint, RoadOption) pairs. The length is computed by summing the
+    Euclidean distances between consecutive waypoint locations.
 
-    :param agent: The CARLA BasicAgent whose planned route length will be computed.
-    :type agent: BasicAgent
-    :return: Total route length in meters.
-    :rtype: float
+    Args:
+        agent (BasicAgent): The CARLA agent whose route length is calculated.
+
+    Returns:
+        float: Total route length in meters.
     """
     route_length = 0.0
-    path = (
-        agent.get_local_planner().get_plan()
-    )  # Retrieve the planned route as a list of (Waypoint, RoadOption) pairs
+    path = agent.get_local_planner().get_plan()  # [(Waypoint, RoadOption), ...]
 
-    # Accumulate Euclidean distances between consecutive waypoints
+    # Sum Euclidean distances between consecutive waypoints
     for i in range(len(path) - 1):
         point1 = path[i][0].transform.location
         point2 = path[i + 1][0].transform.location
         route_length += compute_distance(point1, point2)
 
     return route_length
+
+
+def draw_spawn_points(world: carla.World, spawn_points: List[carla.Transform]) -> None:
+    """
+    Render spawn points in the CARLA world with their indices displayed.
+
+    Args:
+        world (carla.World): The CARLA world instance.
+        spawn_points (List[carla.Transform]): Spawn point transforms to visualize.
+
+    Returns:
+        None
+    """
+    for i, spawn_point in enumerate(spawn_points):
+        # Draw index label above each spawn point
+        world.debug.draw_string(
+            location=spawn_point.location,
+            text=str(i),
+            draw_shadow=True,
+            color=carla.Color(r=255, g=0, b=0),
+            life_time=120,
+        )
