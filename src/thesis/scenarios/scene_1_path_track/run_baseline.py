@@ -17,7 +17,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(script_dir, "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from utils.helpers import actor_cleanup, draw_spawn_points  # noqa: E402, F401
+from utils.helpers import (  # noqa: E402, F401
+    actor_cleanup,
+    draw_spawn_points,
+    set_vehicle_lights,
+)
 
 
 def main():
@@ -30,12 +34,16 @@ def main():
     DISPLAY_TELEMETRY = False
     VEHICLE_LIST = []
 
-    # Set up ego vehicle lights
-    EGO_LIGHT_MASK = carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+    # Set up default ego vehicle lights
+    EGO_DEFAULT_LIGHT_MASK = (
+        carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
+    )
 
     # Indices specific to Town01_Opt only
-    EGO_START_INDEX = 182
-    EGO_STOP_INDEX = 77
+    # EGO_START_INDEX = 182
+    EGO_START_INDEX = 61
+    # EGO_STOP_INDEX = 77
+    EGO_STOP_INDEX = 13
 
     try:
         # Connect to CARLA server
@@ -76,9 +84,9 @@ def main():
         if EGO_BP.has_attribute("color"):
             EGO_BP.set_attribute("color", "0,21,81")
 
-        # Spawn ego vehicle
+        # Spawn ego vehicle and add vehicle functionalities
         EGO_VEHICLE = world.spawn_actor(EGO_BP, EGO_START_POINT)
-        EGO_VEHICLE.set_light_state(carla.VehicleLightState(EGO_LIGHT_MASK))
+        EGO_VEHICLE.set_light_state(carla.VehicleLightState(EGO_DEFAULT_LIGHT_MASK))
         EGO_VEHICLE.show_debug_telemetry(DISPLAY_TELEMETRY)
         EGO_ACTIVE = True
         VEHICLE_LIST.append(EGO_VEHICLE)
@@ -115,6 +123,7 @@ def main():
             if EGO_ACTIVE:
                 # Set ego agent's target speed based on the maximum predefined OpenDRIVE lane speed limits
                 EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
+                ego_local_planner = EGO_AGENT.get_local_planner()
 
                 # Set up spectator camera
                 EGO_TRANSFORM = EGO_VEHICLE.get_transform()
@@ -125,8 +134,16 @@ def main():
                 )
                 spectator.set_transform(spectator_transform)
 
-                # Compute and baseline vehicle controls
+                # Compute baseline vehicle controls
                 ego_control = EGO_AGENT.run_step()
+
+                # Set up ego vehicle lights
+                ego_new_light_mask = set_vehicle_lights(
+                    EGO_DEFAULT_LIGHT_MASK, ego_control, ego_local_planner
+                )
+                EGO_VEHICLE.set_light_state(ego_new_light_mask)
+
+                # Apply baseline vehicle controls
                 EGO_VEHICLE.apply_control(ego_control)
 
             # Terminate the game loop

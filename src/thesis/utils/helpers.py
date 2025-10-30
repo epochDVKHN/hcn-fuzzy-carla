@@ -10,6 +10,7 @@ sys.path.append(
 )
 
 from agents.navigation.basic_agent import BasicAgent
+from agents.navigation.local_planner import LocalPlanner, RoadOption
 from agents.tools.misc import compute_distance
 
 
@@ -145,3 +146,40 @@ def draw_spawn_points(world: carla.World, spawn_points: List[carla.Transform]) -
             color=carla.Color(r=255, g=0, b=0),
             life_time=120,
         )
+
+
+def set_vehicle_lights(
+    vehicle_default_lights: int,
+    vehicle_control: carla.VehicleControl,
+    vehicle_local_planner: LocalPlanner,
+) -> carla.VehicleLightState:
+    vehicle_updated_lights = vehicle_default_lights
+    intent_to_turn_left = False
+    intent_to_turn_right = False
+    LOOK_AHEAD_POINTS = 11  # Number of waypoints to look ahead
+
+    # Longitudinal lights
+    if vehicle_control.brake > 0.0:
+        vehicle_updated_lights |= carla.VehicleLightState.Brake
+    if vehicle_control.reverse:
+        vehicle_updated_lights |= carla.VehicleLightState.Reverse
+
+    # Lateral lights
+    # Get the next set of upcoming waypoints from the local planner
+    look_ahead_plan = list(vehicle_local_planner.get_plan())[:LOOK_AHEAD_POINTS]
+
+    # Check the road options in the upcoming plan  for any intention to turn
+    for _, roadoption in look_ahead_plan:
+        if roadoption in (RoadOption.LEFT, RoadOption.CHANGELANELEFT):
+            intent_to_turn_left = True
+            break
+        if roadoption in (RoadOption.RIGHT, RoadOption.CHANGELANERIGHT):
+            intent_to_turn_right = True
+            break
+
+    if intent_to_turn_right:
+        vehicle_updated_lights |= carla.VehicleLightState.RightBlinker
+    if intent_to_turn_left:
+        vehicle_updated_lights |= carla.VehicleLightState.LeftBlinker
+
+    return carla.VehicleLightState(vehicle_updated_lights)
