@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+from collections import deque
 
 # NOTE: Update the path below to your CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
 sys.path.append(
@@ -33,6 +34,9 @@ def main():
     SERVER_TIMEOUT = 10.0
     DISPLAY_TELEMETRY = False
     VEHICLE_LIST = []
+
+    # Local planner waypoint history
+    ego_step_history = deque(maxlen=12)
 
     # Set up default ego vehicle lights
     EGO_DEFAULT_LIGHT_MASK = (
@@ -111,7 +115,7 @@ def main():
 
         # Set up ego agent navigation plan
         EGO_AGENT.set_destination(EGO_DESTINATION)
-        logging.info(f"Ego Basic Agent set to destination {EGO_DESTINATION}.")
+        logging.info(f"Ego Basic Agent set to Destination {EGO_DESTINATION}.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
@@ -124,6 +128,11 @@ def main():
                 # Set ego agent's target speed based on the maximum predefined OpenDRIVE lane speed limits
                 EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
                 ego_local_planner = EGO_AGENT.get_local_planner()
+
+                # Append current step of the local planner to the history
+                ego_step_history.append(
+                    ego_local_planner.get_incoming_waypoint_and_direction(steps=0)
+                )
 
                 # Set up spectator camera
                 EGO_TRANSFORM = EGO_VEHICLE.get_transform()
@@ -139,7 +148,10 @@ def main():
 
                 # Set up ego vehicle lights
                 ego_new_light_mask = set_vehicle_lights(
-                    EGO_DEFAULT_LIGHT_MASK, ego_control, ego_local_planner
+                    EGO_DEFAULT_LIGHT_MASK,
+                    ego_control,
+                    ego_local_planner,
+                    list(ego_step_history),
                 )
                 EGO_VEHICLE.set_light_state(ego_new_light_mask)
 

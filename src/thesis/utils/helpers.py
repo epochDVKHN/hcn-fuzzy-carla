@@ -1,6 +1,6 @@
 import logging
 import sys
-from typing import List
+from typing import List, Tuple
 
 import carla
 
@@ -152,11 +152,12 @@ def set_vehicle_lights(
     vehicle_default_lights: int,
     vehicle_control: carla.VehicleControl,
     vehicle_local_planner: LocalPlanner,
+    vehicle_history_steps: List[Tuple[carla.Waypoint, RoadOption]],
 ) -> carla.VehicleLightState:
     vehicle_updated_lights = vehicle_default_lights
     intent_to_turn_left = False
     intent_to_turn_right = False
-    LOOK_AHEAD_POINTS = 11  # Number of waypoints to look ahead
+    LOOK_AHEAD_POINTS = 12  # Number of waypoints to look ahead
 
     # Longitudinal lights
     if vehicle_control.brake > 0.0:
@@ -165,11 +166,13 @@ def set_vehicle_lights(
         vehicle_updated_lights |= carla.VehicleLightState.Reverse
 
     # Lateral lights
-    # Get the next set of upcoming waypoints from the local planner
-    look_ahead_plan = list(vehicle_local_planner.get_plan())[:LOOK_AHEAD_POINTS]
+    # Get the next set of upcoming steps from the local planner
+    vehicle_upcoming_steps = list(vehicle_local_planner.get_plan())[1:LOOK_AHEAD_POINTS]
+    # Get the road plan for the vehicle accounting for the previous and upcoming steps
+    vehicle_road_plan = vehicle_history_steps + vehicle_upcoming_steps
 
     # Check the road options in the upcoming plan  for any intention to turn
-    for _, roadoption in look_ahead_plan:
+    for _, roadoption in vehicle_road_plan:
         if roadoption in (RoadOption.LEFT, RoadOption.CHANGELANELEFT):
             intent_to_turn_left = True
             break
