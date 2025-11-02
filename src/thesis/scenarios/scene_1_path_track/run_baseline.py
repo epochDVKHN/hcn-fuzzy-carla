@@ -35,7 +35,7 @@ def main():
     DISPLAY_TELEMETRY = False
     VEHICLE_LIST = []
 
-    # Local planner waypoint history
+    # Store recent waypoints for local planner history
     ego_step_history = deque(maxlen=12)
 
     # Set up default ego vehicle lights

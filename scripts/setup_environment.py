@@ -6,7 +6,7 @@ Initializes the CARLA simulation environment.
 Connects to the local CARLA server, loads a specified map, stabilizes the world, and applies predefined weather parameters.
 
 Usage:
-	Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
+        Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
 """
 
 import logging
@@ -18,17 +18,19 @@ import carla
 
 def main():
     """
-    Initialize the CARLA simulation environment.
+    Initialize and configure the CARLA simulation environment based on the project specifications.
 
-    Connects to the CARLA server, loads the specified map, and applies predefined
-    weather parameters to set up the simulation world.
+    Establishes a connection to the local CARLA server, loads the specified map,
+    applies predefined weather conditions, and disables all traffic lights.
 
     Raises:
-        Exception: If any unhandled error occurs during setup.
+        Exception: If an error occurs during the environment setup.
     """
     HOST = "localhost"
     PORT = 2000
     WORLD_MAP = "Town01_Opt"
+    TRAFFIC_LIGHT_STATE = carla.TrafficLightState.Off
+    TRAFFIC_LIGHT_FREEZE = True
 
     try:
         # Connect to the CARLA server
@@ -36,6 +38,7 @@ def main():
         client.set_timeout(10.0)
 
         # Load the environment map
+        # world = client.get_world()
         world = client.load_world(
             map_name=WORLD_MAP, reset_settings=True, map_layers=carla.MapLayer.All
         )
@@ -65,6 +68,20 @@ def main():
         # Update the environment weather
         world.set_weather(weather)
         logging.info("Weather updated.")
+
+        # Wait briefly to ensure the world is fully initialized
+        for _ in range(1):
+            world.wait_for_tick()
+
+        # Retrieve all traffic light actors from the simulation world
+        traffic_lights = world.get_actors().filter("traffic.traffic_light")
+
+        # Disable and freeze all traffic lights
+        for light in traffic_lights:
+            light.set_state(TRAFFIC_LIGHT_STATE)
+            light.freeze(TRAFFIC_LIGHT_FREEZE)
+
+        logging.info("Traffic lights disabled.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):

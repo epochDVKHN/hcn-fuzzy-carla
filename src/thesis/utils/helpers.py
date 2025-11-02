@@ -154,24 +154,37 @@ def set_vehicle_lights(
     vehicle_local_planner: LocalPlanner,
     vehicle_history_steps: List[Tuple[carla.Waypoint, RoadOption]],
 ) -> carla.VehicleLightState:
+    """
+    Determine and update the vehicle's light state.
+
+    The function evaluates control inputs, local planner trajectory, and recent driving history to activate appropriate vehicle lights (e.g., brake, reverse, and turn indicators).
+
+    Args:
+        vehicle_default_lights (int): The initial/default light state.
+        vehicle_control (carla.VehicleControl): Current control inputs for the vehicle.
+        vehicle_local_planner (LocalPlanner): Local planner providing future waypoints.
+        vehicle_history_steps (List[Tuple[carla.Waypoint, RoadOption]]): List of recent waypoints and corresponding road options.
+
+    Returns:
+        carla.VehicleLightState: Updated vehicle light state mask.
+    """
     vehicle_updated_lights = vehicle_default_lights
     intent_to_turn_left = False
     intent_to_turn_right = False
-    LOOK_AHEAD_POINTS = 12  # Number of waypoints to look ahead
+    LOOK_AHEAD_POINTS = 12  # Number of future waypoints to analyze
 
-    # Longitudinal lights
+    # Longitudinal lights: brake or reverse indicators
     if vehicle_control.brake > 0.0:
         vehicle_updated_lights |= carla.VehicleLightState.Brake
     if vehicle_control.reverse:
         vehicle_updated_lights |= carla.VehicleLightState.Reverse
 
-    # Lateral lights
-    # Get the next set of upcoming steps from the local planner
+    # Extract upcoming waypoints from the local planner
     vehicle_upcoming_steps = list(vehicle_local_planner.get_plan())[1:LOOK_AHEAD_POINTS]
-    # Get the road plan for the vehicle accounting for the previous and upcoming steps
+    # Combine past and upcoming steps for turn intent analysis
     vehicle_road_plan = vehicle_history_steps + vehicle_upcoming_steps
 
-    # Check the road options in the upcoming plan  for any intention to turn
+    # Detect turn intent based on road options
     for _, roadoption in vehicle_road_plan:
         if roadoption in (RoadOption.LEFT, RoadOption.CHANGELANELEFT):
             intent_to_turn_left = True
@@ -180,6 +193,7 @@ def set_vehicle_lights(
             intent_to_turn_right = True
             break
 
+    # Lateral lights: activate appropriate blinkers
     if intent_to_turn_right:
         vehicle_updated_lights |= carla.VehicleLightState.RightBlinker
     if intent_to_turn_left:
