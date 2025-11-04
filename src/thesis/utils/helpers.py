@@ -1,6 +1,7 @@
+import enum
 import logging
 import sys
-from typing import List, Tuple
+from typing import Deque, List, Tuple
 
 import carla
 
@@ -10,8 +11,33 @@ sys.path.append(
 )
 
 from agents.navigation.basic_agent import BasicAgent
-from agents.navigation.local_planner import LocalPlanner, RoadOption
+from agents.navigation.local_planner import RoadOption
 from agents.tools.misc import compute_distance
+
+
+class SpectatorCameraPositions(enum.Enum):
+    """
+    Enumerates available spectator camera perspectives.
+
+    Each value corresponds to a predefined camera position
+    used for switching between different viewing angles in simulation.
+    """
+
+    LOW_ANGLE_CHASE_VIEW = (
+        1  # Low, cinematic chase view positioned tightly behind the vehicle
+    )
+    FRONT_BUMPER_VIEW = 2  # First-person view from the front bumper
+    REVERSE_TRACK_VIEW = (
+        3  # Forward-facing shot from ahead of the vehicle, moving backward
+    )
+    REAR_BUMPER_VIEW = 4  # Rear-facing view fixed just behind the vehicle’s bumper
+    HIGH_ANGLE_CHASE_VIEW = (
+        5  # Elevated chase view showing the car, lane lines, and road ahead
+    )
+    FRONT_QUARTER_VIEW = (
+        6  # Angled front-quarter view capturing a dynamic three-quarter perspective
+    )
+    BIRD_EYE_VIEW = 7  # Top-down drone-style view directly above the vehicle
 
 
 def actor_cleanup(world: carla.World) -> None:
@@ -100,7 +126,7 @@ def actor_cleanup(world: carla.World) -> None:
                 safe_destroy(walker)
 
 
-def get_route_length(agent: BasicAgent) -> float:
+def get_route_length(vehicle_agent: BasicAgent) -> float:
     """
     Calculate the total length of an agent's planned route.
 
@@ -115,7 +141,7 @@ def get_route_length(agent: BasicAgent) -> float:
         float: Total route length in meters.
     """
     route_length = 0.0
-    path = agent.get_local_planner().get_plan()  # [(Waypoint, RoadOption), ...]
+    path = vehicle_agent.get_local_planner().get_plan()  # [(Waypoint, RoadOption), ...]
 
     # Sum Euclidean distances between consecutive waypoints
     for i in range(len(path) - 1):
@@ -126,17 +152,22 @@ def get_route_length(agent: BasicAgent) -> float:
     return route_length
 
 
-def draw_spawn_points(world: carla.World, spawn_points: List[carla.Transform]) -> None:
+def draw_spawn_points(
+    world: carla.World, spawn_points: List[carla.Transform], flag: bool
+) -> None:
     """
-    Render spawn points in the CARLA world with their indices displayed.
+    Visualize spawn points in the CARLA world with indexed labels.
 
     Args:
-        world (carla.World): The CARLA world instance.
-        spawn_points (List[carla.Transform]): Spawn point transforms to visualize.
+        world (carla.World): The active CARLA world instance.
+        spawn_points (List[carla.Transform]): Spawn point transforms to label.
+        flag (bool): Whether to render the labels.
 
     Returns:
         None
     """
+    if not flag:
+        return
     for i, spawn_point in enumerate(spawn_points):
         # Draw index label above each spawn point
         world.debug.draw_string(
@@ -151,40 +182,49 @@ def draw_spawn_points(world: carla.World, spawn_points: List[carla.Transform]) -
 def set_vehicle_lights(
     vehicle_default_lights: int,
     vehicle_control: carla.VehicleControl,
-    vehicle_local_planner: LocalPlanner,
-    vehicle_history_steps: List[Tuple[carla.Waypoint, RoadOption]],
+    vehicle_agent: BasicAgent,
+    vehicle_step_history: Deque[Tuple[carla.Waypoint, RoadOption]],
 ) -> carla.VehicleLightState:
     """
-    Determine and update the vehicle's light state.
-
-    The function evaluates control inputs, local planner trajectory, and recent driving history to activate appropriate vehicle lights (e.g., brake, reverse, and turn indicators).
+    Update a vehicle's light state based on control input and route intent.
 
     Args:
-        vehicle_default_lights (int): The initial/default light state.
-        vehicle_control (carla.VehicleControl): Current control inputs for the vehicle.
-        vehicle_local_planner (LocalPlanner): Local planner providing future waypoints.
-        vehicle_history_steps (List[Tuple[carla.Waypoint, RoadOption]]): List of recent waypoints and corresponding road options.
+        vehicle_default_lights (int): Current default vehicle light state.
+        vehicle_control (carla.VehicleControl): Current control signals (throttle, brake, reverse, etc.).
+        vehicle_agent (BasicAgent): Agent controlling the vehicle.
+        vehicle_step_history (Deque[Tuple[carla.Waypoint, RoadOption]]):
+            Recent waypoint and maneuver history from the local planner.
 
     Returns:
-        carla.VehicleLightState: Updated vehicle light state mask.
+        carla.VehicleLightState: Updated light state including brake, reverse, and turn indicators.
     """
+    vehicle_local_planner = vehicle_agent.get_local_planner()
     vehicle_updated_lights = vehicle_default_lights
+
+    # Flags to track upcoming turn intent
     intent_to_turn_left = False
     intent_to_turn_right = False
-    LOOK_AHEAD_POINTS = 12  # Number of future waypoints to analyze
+    LOOK_AHEAD_POINTS = 12  # Number of future waypoints to analyze for turn intent
 
-    # Longitudinal lights: brake or reverse indicators
+    # Record current local planner step for continuity
+    vehicle_step_history.append(
+        vehicle_local_planner.get_incoming_waypoint_and_direction(steps=0)
+    )
+
+    # Longitudinal lights: activate brake and reverse lights based on control input
     if vehicle_control.brake > 0.0:
         vehicle_updated_lights |= carla.VehicleLightState.Brake
     if vehicle_control.reverse:
         vehicle_updated_lights |= carla.VehicleLightState.Reverse
 
-    # Extract upcoming waypoints from the local planner
-    vehicle_upcoming_steps = list(vehicle_local_planner.get_plan())[1:LOOK_AHEAD_POINTS]
-    # Combine past and upcoming steps for turn intent analysis
-    vehicle_road_plan = vehicle_history_steps + vehicle_upcoming_steps
+    # Get recent and upcoming waypoints for turn intent detection
+    vehicle_history_waypoints = list(vehicle_step_history)
+    vehicle_future_waypoints = list(vehicle_local_planner.get_plan())[
+        1:LOOK_AHEAD_POINTS
+    ]
+    vehicle_road_plan = vehicle_history_waypoints + vehicle_future_waypoints
 
-    # Detect turn intent based on road options
+    # Detect turn-related road options in recent and future steps
     for _, roadoption in vehicle_road_plan:
         if roadoption in (RoadOption.LEFT, RoadOption.CHANGELANELEFT):
             intent_to_turn_left = True
@@ -193,10 +233,93 @@ def set_vehicle_lights(
             intent_to_turn_right = True
             break
 
-    # Lateral lights: activate appropriate blinkers
+    # Lateral lights: activate corresponding blinkers based on detected turn intent
     if intent_to_turn_right:
         vehicle_updated_lights |= carla.VehicleLightState.RightBlinker
     if intent_to_turn_left:
         vehicle_updated_lights |= carla.VehicleLightState.LeftBlinker
 
     return carla.VehicleLightState(vehicle_updated_lights)
+
+
+def set_spectator_camera(
+    spectator_camera: carla.Actor,
+    vehicle: carla.Vehicle,
+    camera_position: SpectatorCameraPositions,
+) -> carla.Transform:
+    """Position the spectator camera relative to a vehicle based on a predefined view.
+
+    Args:
+        spectator_camera (carla.Actor): The spectator camera actor.
+        vehicle (carla.Vehicle): The target vehicle to align the camera with.
+        camera_position (SpectatorCameraPositions): The desired camera viewpoint preset.
+
+    Returns:
+        carla.Transform: The computed world-space transform for the spectator camera.
+
+    Raises:
+        TypeError: If `camera_position` is not a SpectatorCameraPositions enum value.
+    """
+    if not isinstance(camera_position, SpectatorCameraPositions):
+        raise TypeError(
+            f"camera_position must be an instance of SpectatorCameraPositions enum, not {type(camera_position).__name__}."
+        )
+
+    # Get the current world transform of the vehicle
+    ego_transform = vehicle.get_transform()
+
+    # Default neutral offsets
+    relative_location = carla.Location(x=0, y=0, z=0)
+    relative_rotation = carla.Rotation(pitch=0, yaw=0, roll=0)
+
+    # Assign relative offsets and rotations based on the selected view
+    if camera_position == SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW:
+        relative_location = carla.Location(x=-4.3, y=0.0, z=2.2)
+        relative_rotation = carla.Rotation(pitch=2.0)
+
+    elif camera_position == SpectatorCameraPositions.FRONT_BUMPER_VIEW:
+        relative_location = carla.Location(x=1.99, y=0.0, z=1.3)
+        relative_rotation = carla.Rotation(pitch=0.0)
+
+    elif camera_position == SpectatorCameraPositions.REVERSE_TRACK_VIEW:
+        relative_location = carla.Location(x=5.76, y=1.5, z=1.7)
+        relative_rotation = carla.Rotation(pitch=2.0)
+
+    elif camera_position == SpectatorCameraPositions.REAR_BUMPER_VIEW:
+        relative_location = carla.Location(x=-1.34, y=0.0, z=1.3)
+        relative_rotation = carla.Rotation(pitch=0.0)
+
+    elif camera_position == SpectatorCameraPositions.HIGH_ANGLE_CHASE_VIEW:
+        relative_location = carla.Location(x=-4.37, y=0.0, z=3.9)
+        relative_rotation = carla.Rotation(pitch=-16.3)
+
+    elif camera_position == SpectatorCameraPositions.FRONT_QUARTER_VIEW:
+        relative_location = carla.Location(x=0.32, y=-1.4, z=1.3)
+        relative_rotation = carla.Rotation(pitch=0.0)
+
+    elif camera_position == SpectatorCameraPositions.BIRD_EYE_VIEW:
+        relative_location = carla.Location(x=2, y=0, z=29.0)
+        relative_rotation = carla.Rotation(pitch=-90.0)
+
+    # Adjust yaw for direction-dependent views
+    if camera_position in (
+        SpectatorCameraPositions.REVERSE_TRACK_VIEW,
+        SpectatorCameraPositions.REAR_BUMPER_VIEW,
+    ):
+        adjusted_yaw = ego_transform.rotation.yaw + 180.0  # Flip to face rearward
+    elif camera_position == SpectatorCameraPositions.FRONT_QUARTER_VIEW:
+        adjusted_yaw = ego_transform.rotation.yaw + 25.0  # Slight angled offset
+    elif camera_position == SpectatorCameraPositions.BIRD_EYE_VIEW:
+        adjusted_yaw = -180.0  # Static top-down orientation
+    else:
+        adjusted_yaw = ego_transform.rotation.yaw  # Default follows vehicle heading
+
+    # Transform local camera offset relative to the vehicle's position
+    world_location = ego_transform.transform(relative_location)
+    world_rotation = carla.Rotation(
+        pitch=relative_rotation.pitch,
+        yaw=adjusted_yaw,
+        roll=relative_rotation.roll,
+    )
+
+    return carla.Transform(world_location, world_rotation)

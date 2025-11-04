@@ -18,9 +18,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(script_dir, "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from utils.helpers import (  # noqa: E402, F401
+from utils.helpers import (  # noqa: E402
+    SpectatorCameraPositions,
     actor_cleanup,
     draw_spawn_points,
+    set_spectator_camera,
     set_vehicle_lights,
 )
 
@@ -33,6 +35,7 @@ def main():
     DELTA_SECONDS = 0.05
     SERVER_TIMEOUT = 10.0
     DISPLAY_TELEMETRY = False
+    DRAW_SPAWN_POINTS = False
     VEHICLE_LIST = []
 
     # Store recent waypoints for local planner history
@@ -44,10 +47,10 @@ def main():
     )
 
     # Indices specific to Town01_Opt only
-    # EGO_START_INDEX = 182
-    EGO_START_INDEX = 61
-    # EGO_STOP_INDEX = 77
-    EGO_STOP_INDEX = 13
+    EGO_START_INDEX = 182
+    # EGO_START_INDEX = 61
+    EGO_STOP_INDEX = 77
+    # EGO_STOP_INDEX = 13
 
     try:
         # Connect to CARLA server
@@ -73,7 +76,7 @@ def main():
         logging.debug("Synchronous mode enabled.")
 
         # Draw the default spawn point locations as numbers in the map
-        # draw_spawn_points(world, spawn_points)
+        draw_spawn_points(world, spawn_points, DRAW_SPAWN_POINTS)
 
         # Set up ego vehicle navigation endpoints
         EGO_START_POINT = spawn_points[EGO_START_INDEX]
@@ -127,19 +130,12 @@ def main():
             if EGO_ACTIVE:
                 # Set ego agent's target speed based on the maximum predefined OpenDRIVE lane speed limits
                 EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
-                ego_local_planner = EGO_AGENT.get_local_planner()
-
-                # Append current step of the local planner to the history
-                ego_step_history.append(
-                    ego_local_planner.get_incoming_waypoint_and_direction(steps=0)
-                )
 
                 # Set up spectator camera
-                EGO_TRANSFORM = EGO_VEHICLE.get_transform()
-                # For chase camera view
-                spectator_transform = carla.Transform(
-                    EGO_TRANSFORM.transform(carla.Location(x=-4, z=2)),
-                    EGO_TRANSFORM.rotation,
+                spectator_transform = set_spectator_camera(
+                    spectator,
+                    EGO_VEHICLE,
+                    SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
                 )
                 spectator.set_transform(spectator_transform)
 
@@ -150,8 +146,8 @@ def main():
                 ego_new_light_mask = set_vehicle_lights(
                     EGO_DEFAULT_LIGHT_MASK,
                     ego_control,
-                    ego_local_planner,
-                    list(ego_step_history),
+                    EGO_AGENT,
+                    ego_step_history,
                 )
                 EGO_VEHICLE.set_light_state(ego_new_light_mask)
 
