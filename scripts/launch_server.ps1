@@ -3,10 +3,7 @@
     Launches the CARLA simulator server with configurable settings.
 
 .DESCRIPTION
-    This script sets up the CARLA server environment and starts the server executable
-    with specified command-line arguments for window mode, resolution, graphics quality,
-    and GPU preference. It can be easily modified for fullscreen, off-screen rendering,
-    or different graphics APIs.
+    This script sets up the CARLA server environment and starts the server executable with specified command-line arguments for window mode, resolution, graphics quality, and GPU preference. It can be easily modified for fullscreen, off-screen rendering, or different graphics APIs.
 #>
 
 # Set the paths to the CARLA server folder and executable

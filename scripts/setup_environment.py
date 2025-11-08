@@ -6,7 +6,7 @@ Initializes the CARLA simulation environment.
 Connects to the local CARLA server, loads a specified map, stabilizes the world, applies predefined weather parameters, and disables all traffic lights.
 
 Usage:
-        Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
+    Run this script directly or via `client/scripts/launch_world.ps1` to set up the CARLA environment.
 """
 
 import logging
@@ -20,15 +20,14 @@ def main():
     """
     Initialize and configure the CARLA simulation environment based on the project specifications.
 
-    Establishes a connection to the local CARLA server, loads the specified map,
-    applies predefined weather conditions, and disables all traffic lights.
+    Establishes a connection to the local CARLA server, loads the specified map, applies predefined weather conditions, and disables all traffic lights.
 
     Raises:
         Exception: If an error occurs during the environment setup.
     """
     HOST = "localhost"
     PORT = 2000
-    WORLD_MAP = "Town01_Opt"
+    MAP_NAME = "Town01_Opt"
     TRAFFIC_LIGHT_STATE = carla.TrafficLightState.Off
     TRAFFIC_LIGHT_FREEZE = True
 
@@ -38,11 +37,10 @@ def main():
         client.set_timeout(10.0)
 
         # Load the environment map
-        # world = client.get_world()
         world = client.load_world(
-            map_name=WORLD_MAP, reset_settings=True, map_layers=carla.MapLayer.All
+            map_name=MAP_NAME, reset_settings=True, map_layers=carla.MapLayer.All
         )
-        logging.info(f"{WORLD_MAP} loaded.")
+        logging.info(f"Map '{MAP_NAME}' loaded.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
@@ -67,7 +65,7 @@ def main():
 
         # Update the environment weather
         world.set_weather(weather)
-        logging.info("Weather updated.")
+        logging.info("Weather parameters updated.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
@@ -88,10 +86,12 @@ def main():
             world.wait_for_tick()
 
     except Exception as _:
-        logging.critical("An unhandled exception occurred!", exc_info=True)
+        logging.critical(
+            "Simulation failed due to an unhandled exception!", exc_info=True
+        )
     finally:
         time.sleep(0.5)
-        logging.info("Setup complete.\n")
+        logging.info("Environment setup completed.\n")
 
 
 # Entry point: configure logging and run environment setup

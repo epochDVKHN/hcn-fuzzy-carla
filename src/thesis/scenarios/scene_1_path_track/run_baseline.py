@@ -1,8 +1,8 @@
 import logging
-import os
 import sys
 import time
 from collections import deque
+from pathlib import Path
 
 # NOTE: Update the path below to your CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
 sys.path.append(
@@ -12,16 +12,19 @@ sys.path.append(
 import carla
 from agents.navigation.basic_agent import BasicAgent
 
-# Add project root path
-script_dir = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(script_dir, "..", ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
+# Add project root path for module imports
+FILE_PATH = Path(__file__).resolve()
+PROJECT_ROOT = FILE_PATH.parents[2]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
 
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     actor_cleanup,
-    draw_spawn_points,
+    draw_plan_waypoints,
+    generate_custom_route,
+    get_route_length,
     set_spectator_camera,
     set_vehicle_lights,
 )
@@ -35,7 +38,8 @@ def main():
     DELTA_SECONDS = 0.05
     SERVER_TIMEOUT = 10.0
     DISPLAY_TELEMETRY = False
-    DRAW_SPAWN_POINTS = False
+    DRAW_PLAN_WAYPOINTS = False
+    CUSTOM_ROUTE_NAVIGATION = False
     VEHICLE_LIST = []
 
     # Store recent waypoints for local planner history
@@ -45,12 +49,12 @@ def main():
     EGO_DEFAULT_LIGHT_MASK = (
         carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
     )
-
-    # Indices specific to Town01_Opt only
-    EGO_START_INDEX = 182
-    # EGO_START_INDEX = 61
-    EGO_STOP_INDEX = 77
-    # EGO_STOP_INDEX = 13
+    # NOTE: Custom route indices for the CARLA Town01_Opt map
+    # Format: [Start Point, Spawn Point 2, ..., End Point]
+    # Intermediate points define route segments; only key points (e.g., after turns) are needed.
+    # Use `launch_spawn_visualization.ps1` to view spawn points and choose an appropriate start index.
+    EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
+    # EGO_ROUTE_INDICES = [184, 182, 47, 36]
 
     try:
         # Connect to CARLA server
@@ -75,12 +79,9 @@ def main():
         SYNCHRONOUS = True
         logging.debug("Synchronous mode enabled.")
 
-        # Draw the default spawn point locations as numbers in the map
-        draw_spawn_points(world, spawn_points, DRAW_SPAWN_POINTS)
-
         # Set up ego vehicle navigation endpoints
-        EGO_START_POINT = spawn_points[EGO_START_INDEX]
-        EGO_STOP_POINT = spawn_points[EGO_STOP_INDEX]
+        EGO_START_POINT = spawn_points[EGO_ROUTE_INDICES[0]]
+        EGO_STOP_POINT = spawn_points[EGO_ROUTE_INDICES[-1]]
         EGO_ORIGIN = EGO_START_POINT.location
         EGO_DESTINATION = EGO_STOP_POINT.location
 
@@ -95,9 +96,10 @@ def main():
         EGO_VEHICLE = world.spawn_actor(EGO_BP, EGO_START_POINT)
         EGO_VEHICLE.set_light_state(carla.VehicleLightState(EGO_DEFAULT_LIGHT_MASK))
         EGO_VEHICLE.show_debug_telemetry(DISPLAY_TELEMETRY)
+
         EGO_ACTIVE = True
         VEHICLE_LIST.append(EGO_VEHICLE)
-        logging.info(f"Spawned Ego {EGO_VEHICLE.type_id} at Origin {EGO_ORIGIN}.")
+        logging.info(f"Ego vehicle ({EGO_VEHICLE.type_id}) spawned at {EGO_ORIGIN}.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
@@ -116,9 +118,19 @@ def main():
         )
         logging.debug("Ego Basic Agent initialized.")
 
-        # Set up ego agent navigation plan
-        EGO_AGENT.set_destination(EGO_DESTINATION)
-        logging.info(f"Ego Basic Agent set to Destination {EGO_DESTINATION}.")
+        if not CUSTOM_ROUTE_NAVIGATION:
+            # Use A* global route planner for shortest-path navigation
+            EGO_AGENT.set_destination(EGO_DESTINATION)
+        else:
+            # Use predefined custom route for navigation
+            EGO_ROUTE_PLAN = generate_custom_route(EGO_ROUTE_INDICES, spawn_points, map)
+            EGO_AGENT.set_global_plan(EGO_ROUTE_PLAN)
+
+        ROUTE_TYPE = "custom" if CUSTOM_ROUTE_NAVIGATION else "A*"
+        logging.info(
+            f"Ego vehicle navigation initialized ({ROUTE_TYPE} route) toward {EGO_DESTINATION}."
+        )
+        logging.info(f"Total route length: {get_route_length(EGO_AGENT):.2f} m.")
 
         # Wait briefly to ensure the world is fully initialized
         for _ in range(1):
@@ -126,18 +138,22 @@ def main():
 
         # Run game loop
         while True:
-            world.tick()
+            server_frame_ID = world.tick()
+
             if EGO_ACTIVE:
                 # Set ego agent's target speed based on the maximum predefined OpenDRIVE lane speed limits
                 EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
 
                 # Set up spectator camera
                 spectator_transform = set_spectator_camera(
-                    spectator,
                     EGO_VEHICLE,
                     SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
                 )
                 spectator.set_transform(spectator_transform)
+
+                # Draw the plan path in the map
+                if DRAW_PLAN_WAYPOINTS:
+                    draw_plan_waypoints(world, EGO_AGENT, server_frame_ID)
 
                 # Compute baseline vehicle controls
                 ego_control = EGO_AGENT.run_step()
@@ -167,7 +183,9 @@ def main():
     except KeyboardInterrupt:
         logging.warning("Simulation interrupted by user!")
     except Exception as _:
-        logging.critical("An unhandled exception occurred!", exc_info=True)
+        logging.critical(
+            "Simulation failed due to an unhandled exception.", exc_info=True
+        )
     finally:
         # Disable synchronous mode and restore original settings
         if SYNCHRONOUS:

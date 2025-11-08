@@ -1,16 +1,18 @@
 import enum
 import logging
+import math
 import sys
 from typing import Deque, List, Tuple
 
 import carla
 
-# NOTE: UPDATE the path below to YOUR CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
+# NOTE: UPDATE the vehicle_plan below to YOUR CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
 sys.path.append(
     r"C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor\PythonAPI\carla"
 )
 
 from agents.navigation.basic_agent import BasicAgent
+from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.local_planner import RoadOption
 from agents.tools.misc import compute_distance
 
@@ -141,41 +143,45 @@ def get_route_length(vehicle_agent: BasicAgent) -> float:
         float: Total route length in meters.
     """
     route_length = 0.0
-    path = vehicle_agent.get_local_planner().get_plan()  # [(Waypoint, RoadOption), ...]
+    # List of [(Waypoint, RoadOption), ...]
+    vehicle_plan = vehicle_agent.get_local_planner().get_plan()
 
     # Sum Euclidean distances between consecutive waypoints
-    for i in range(len(path) - 1):
-        point1 = path[i][0].transform.location
-        point2 = path[i + 1][0].transform.location
-        route_length += compute_distance(point1, point2)
+    for i in range(len(vehicle_plan) - 1):
+        waypoint1 = vehicle_plan[i][0].transform.location
+        waypoint2 = vehicle_plan[i + 1][0].transform.location
+        route_length += compute_distance(waypoint1, waypoint2)
 
     return route_length
 
 
-def draw_spawn_points(
-    world: carla.World, spawn_points: List[carla.Transform], flag: bool
+def draw_spawn_waypoints(
+    world: carla.World,
+    spawn_waypoints: List[carla.Transform],
+    display_time: float = 120,
 ) -> None:
     """
-    Visualize spawn points in the CARLA world with indexed labels.
+    Draws labeled spawn waypoints in the CARLA world.
+
+    Each spawn waypoint is annotated with its index in red text above its location.
 
     Args:
-        world (carla.World): The active CARLA world instance.
-        spawn_points (List[carla.Transform]): Spawn point transforms to label.
-        flag (bool): Whether to render the labels.
+        world (carla.World): The CARLA simulation world instance.
+        spawn_waypoints (List[carla.Transform]): List of spawn waypoint transforms.
+        display_time (float, optional): Duration (in seconds) for which labels remain visible. Defaults to 120.
 
     Returns:
         None
+
     """
-    if not flag:
-        return
-    for i, spawn_point in enumerate(spawn_points):
-        # Draw index label above each spawn point
+    for i, spawn_waypoint in enumerate(spawn_waypoints):
+        # Draw index label above each spawn waypoint
         world.debug.draw_string(
-            location=spawn_point.location,
+            location=spawn_waypoint.location,
             text=str(i),
             draw_shadow=True,
             color=carla.Color(r=255, g=0, b=0),
-            life_time=120,
+            life_time=display_time,
         )
 
 
@@ -204,7 +210,7 @@ def set_vehicle_lights(
     # Flags to track upcoming turn intent
     intent_to_turn_left = False
     intent_to_turn_right = False
-    LOOK_AHEAD_POINTS = 12  # Number of future waypoints to analyze for turn intent
+    LOOK_AHEAD_waypointS = 12  # Number of future waypoints to analyze for turn intent
 
     # Record current local planner step for continuity
     vehicle_step_history.append(
@@ -220,7 +226,7 @@ def set_vehicle_lights(
     # Get recent and upcoming waypoints for turn intent detection
     vehicle_history_waypoints = list(vehicle_step_history)
     vehicle_future_waypoints = list(vehicle_local_planner.get_plan())[
-        1:LOOK_AHEAD_POINTS
+        1:LOOK_AHEAD_waypointS
     ]
     vehicle_road_plan = vehicle_history_waypoints + vehicle_future_waypoints
 
@@ -243,14 +249,13 @@ def set_vehicle_lights(
 
 
 def set_spectator_camera(
-    spectator_camera: carla.Actor,
     vehicle: carla.Vehicle,
     camera_position: SpectatorCameraPositions,
 ) -> carla.Transform:
-    """Position the spectator camera relative to a vehicle based on a predefined view.
+    """
+    Position the spectator camera relative to a vehicle based on a predefined view.
 
     Args:
-        spectator_camera (carla.Actor): The spectator camera actor.
         vehicle (carla.Vehicle): The target vehicle to align the camera with.
         camera_position (SpectatorCameraPositions): The desired camera viewpoint preset.
 
@@ -323,3 +328,125 @@ def set_spectator_camera(
     )
 
     return carla.Transform(world_location, world_rotation)
+
+
+def draw_plan_waypoints(
+    world: carla.World,
+    vehicle_agent: BasicAgent,
+    frame_num: int,
+    display_freq: int = 10,
+    display_nearest_points: int = 30,
+    display_height: float = 0.5,
+    display_time: float = 1.0,
+) -> None:
+    """
+    Draws the nearest planned waypoints from a CARLA vehicle agent.
+
+    Visualizes the next few waypoints in the agent’s local plan at a set
+    frame interval using the CARLA `world.debug` drawing API.
+
+    Args:
+        world (carla.World): The CARLA simulation world.
+        vehicle_agent (BasicAgent): Agent providing access to the local planner.
+        frame_num (int): Current simulation frame number.
+        display_freq (int, optional): Draw frequency (every N frames). Defaults to 10.
+        display_nearest_points (int, optional): Number of waypoints to draw. Defaults to 30.
+        display_height (float, optional): Height offset for visualization. Defaults to 0.5.
+        display_time (float, optional): Duration (s) each waypoint is displayed. Defaults to 1.0.
+
+    Returns:
+        None
+    """
+    # Only draw every `display_freq` frames to reduce overhead
+    if frame_num % display_freq != 0:
+        return
+
+    # Retrieve the nearest waypoints from the agent’s local plan
+    vehicle_plan = list(vehicle_agent.get_local_planner().get_plan())[
+        :display_nearest_points
+    ]
+
+    for waypoint, _ in vehicle_plan:
+        # Compute start (base) and end (directional) points of the waypoint arrow
+        waypoint_transform = waypoint.transform
+        begin_waypoint = waypoint_transform.location + carla.Location(z=display_height)
+        waypoint_angle = math.radians(waypoint_transform.rotation.yaw)
+        end_waypoint = begin_waypoint + carla.Location(
+            x=math.cos(waypoint_angle), y=math.sin(waypoint_angle)
+        )
+
+        # Draw arrow representing the waypoint direction
+        world.debug.draw_arrow(
+            begin_waypoint,
+            end_waypoint,
+            thickness=0.1,
+            arrow_size=0.3,
+            color=carla.Color(r=0, g=1, b=1),  # Cyan color
+            life_time=display_time,
+        )
+
+
+def generate_custom_route(
+    route_indices: List[int],
+    spawn_points: List[carla.Transform],
+    map: carla.Map,
+    sampling_resolution: float = 2.0,
+) -> List[Tuple[carla.Waypoint, RoadOption]]:
+    """
+    Generate a continuous route between selected spawn points.
+
+    This function constructs a route by connecting specified spawn points in sequence using CARLA's GlobalRoutePlanner.
+
+    Args:
+        route_indices (List[int]): Indices of spawn points to include in the route.
+        spawn_points (List[carla.Transform]): Available spawn point transforms in the map.
+        map (carla.Map): CARLA map instance used for route planning.
+        sampling_resolution (float, optional): Distance between sampled waypoints (meters). Defaults to 2.0.
+
+    Returns:
+        List[Tuple[carla.Waypoint, RoadOption]]: Ordered list of (waypoint, road option) tuples forming the full route.
+    """
+    # Extract locations for the specified spawn points
+    route_locations = [spawn_points[i].location for i in route_indices]
+
+    # Initialize the route planner
+    global_route_planner = GlobalRoutePlanner(map, sampling_resolution)
+    route_plan = []
+
+    # Build the full route by linking each consecutive pair of spawn points
+    for i in range(len(route_locations) - 1):
+        start_location = route_locations[i]
+        end_location = route_locations[i + 1]
+
+        # Generate the route segment between the two locations
+        route_segment = global_route_planner.trace_route(start_location, end_location)
+
+        # Avoid duplicate waypoints by skipping the first waypoint of subsequent segments
+        if i > 0:
+            route_plan.extend(route_segment[1:])
+        else:
+            route_plan.extend(route_segment)
+
+    return route_plan
+
+
+def get_actor_display_name(actor: carla.Actor, truncate: int = 250) -> str:
+    """
+    Generate a concise, human-readable name for a CARLA actor.
+
+    Args:
+        actor (carla.Actor): The CARLA actor whose display name is required.
+        truncate (int, optional): Maximum allowed length of the name. Defaults to 250.
+
+    Returns:
+        str: Formatted actor name, truncated with an ellipsis if it exceeds the limit.
+    """
+    # Replace underscores with dots, capitalize each part, and remove the first component (usually 'vehicle', 'walker', etc.)
+    display_name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])
+
+    # Truncate and append an ellipsis if the name exceeds the specified length
+    return (
+        (display_name[: truncate - 1] + "\u2026")
+        if len(display_name) > truncate
+        else display_name
+    )
