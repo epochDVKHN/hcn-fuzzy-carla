@@ -24,7 +24,7 @@ PROJECT_ROOT = FILE_PATH.parents[1] / "src" / "thesis"
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from utils.helpers import draw_spawn_waypoints  # noqa: E402
+from utils.helpers import draw_spawn_waypoints, world_snapshot_tick  # noqa: E402
 
 
 def main():
@@ -68,9 +68,8 @@ def main():
         )
         spectator.set_transform(SPECTATOR_TRANSFORM)
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.wait_for_tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
     except Exception as _:
         logging.critical(

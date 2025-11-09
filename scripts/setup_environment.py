@@ -12,8 +12,18 @@ Usage:
 import logging
 import sys
 import time
+from pathlib import Path
 
 import carla
+
+# Add project root path for module imports
+FILE_PATH = Path(__file__).resolve()
+PROJECT_ROOT = FILE_PATH.parents[1] / "src" / "thesis"
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.append(str(PROJECT_ROOT))
+
+from utils.helpers import world_snapshot_tick  # noqa: E402
 
 
 def main():
@@ -42,9 +52,8 @@ def main():
         )
         logging.info(f"Map '{MAP_NAME}' loaded.")
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.wait_for_tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
         # Configure weather parameters for environmental realism
         weather = carla.WeatherParameters(
@@ -67,9 +76,8 @@ def main():
         world.set_weather(weather)
         logging.info("Weather parameters updated.")
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.wait_for_tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
         # Retrieve all traffic light actors from the simulation world
         traffic_lights = world.get_actors().filter("traffic.traffic_light")
@@ -81,9 +89,8 @@ def main():
 
         logging.info("Traffic lights disabled.")
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.wait_for_tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
     except Exception as _:
         logging.critical(

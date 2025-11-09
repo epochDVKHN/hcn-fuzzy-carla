@@ -66,7 +66,9 @@ Note:
 		GameInstanceClass=/Script/Carla.CarlaGameInstance
 		TransitionMap=/Game/Carla/Maps/Town02.Town02
 		GlobalDefaultServerGameMode=/Game/Carla/Blueprints/Game/Carl
-16)
+16)	"INFO:  streaming client: connection failed: An operation was attempted on something that is not a socket" occurs due to a race condition between the sensor thread and the main thread. The sensor listen() callbacks run asynchronously ('on-the-fly') in separate threads. The destroy() command tells the server to close the network connection (the "socket") for that sensor. This leads to the race condition wherein the main thread tells the sensor to destroy(), and at that exact same moment, the separate sensor thread is just receiving new data and has no idea the sensor is being destroyed.
+	It's just a messy but harmless part of the shutdown process.
+17)
 
 
 

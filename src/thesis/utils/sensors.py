@@ -59,7 +59,7 @@ class CollisionSensor(object):
             blueprint=collision_blueprint,
             transform=carla.Transform(),
             attach_to=self._parent,
-            attachment=carla.AttachmentType.Rigid,
+            attachment_type=carla.AttachmentType.Rigid,
         )
 
         # Use a weak reference to prevent circular references between sensor and callback
@@ -67,7 +67,9 @@ class CollisionSensor(object):
         self.sensor.listen(
             lambda event: CollisionSensor._on_collision_event_callback(weak_self, event)
         )
-        self._logger.info("Collision detector sensor online and listening for events.")
+        self._logger.debug(
+            f"{get_actor_display_name(self.sensor)} sensor online and listening for events."
+        )
 
     def get_collision_history(
         self,
@@ -110,9 +112,7 @@ class CollisionSensor(object):
         )
 
         self._logger.warning(
-            f"Collision detected at {event.timestamp:.2f} s "
-            f"with: {actor_type} (ID: {event.other_actor.id}), "
-            f"Intensity: {collision_intensity:.2f} N·s."
+            f"Collided with {actor_type} (Impact Intensity: {collision_intensity:.2f} N·s)."
         )
 
         # Store the event sensor data attributes
@@ -203,7 +203,7 @@ class GNSSSensor(object):
             blueprint=gnss_blueprint,
             transform=carla.Transform(carla.Location(x=1.0, y=0.0, z=2.8)),
             attach_to=self._parent,
-            attachment=carla.AttachmentType.Rigid,
+            attachment_type=carla.AttachmentType.Rigid,
         )
 
         # We need to pass the lambda a weak reference to self to avoid circular reference
@@ -211,11 +211,13 @@ class GNSSSensor(object):
         self.sensor.listen(
             lambda step: GNSSSensor._on_gnss_step_callback(weak_self, step)
         )
-        self._logger.info("GNSS sensor online and listening every simulation step.")
+        self._logger.debug(
+            f"{get_actor_display_name(self.sensor)} sensor online and listening every simulation step."
+        )
 
     @staticmethod
     def _on_gnss_step_callback(
-        weak_self: weakref.ReferenceType, step: carla.GNSSMeasurement
+        weak_self: weakref.ReferenceType, step: carla.GnssMeasurement
     ) -> None:
         """
         Processes GNSS measurements from a CARLA GNSS sensor.
@@ -224,7 +226,7 @@ class GNSSSensor(object):
 
         Args:
             weak_self (weakref.ReferenceType): Weak reference to the `GNSSSensor` instance.
-            step (carla.GNSSMeasurement): GNSS measurement data containing frame, timestamp, and geolocation coordinates.
+            step (carla.GnssMeasurement): GNSS measurement data containing frame, timestamp, and geolocation coordinates.
 
         Returns:
             None
@@ -327,7 +329,7 @@ class IMUSensor(object):
             blueprint=imu_blueprint,
             transform=carla.Transform(),
             attach_to=self._parent,
-            attachment=carla.AttachmentType.Rigid,
+            attachment_type=carla.AttachmentType.Rigid,
         )
 
         # We need to pass the lambda a weak reference to self to avoid circular reference
@@ -335,7 +337,9 @@ class IMUSensor(object):
         self.sensor.listen(
             lambda step: IMUSensor._on_imu_step_callback(weak_self, step)
         )
-        self._logger.info("IMU sensor online and listening every simulation step.")
+        self._logger.debug(
+            f"{get_actor_display_name(self.sensor)} sensor online and listening every simulation step."
+        )
 
     @staticmethod
     def _on_imu_step_callback(
@@ -434,7 +438,7 @@ class LaneInvasionSensor(object):
                 blueprint=invasion_blueprint,
                 transform=carla.Transform(),
                 attach_to=self._parent,
-                attachment=carla.AttachmentType.Rigid,
+                attachment_type=carla.AttachmentType.Rigid,
             )
 
             # Use a weak reference to prevent circular references between sensor and callback
@@ -444,8 +448,8 @@ class LaneInvasionSensor(object):
                     weak_self, event
                 )
             )
-            self._logger.info(
-                "Lane invasion detector sensor online and listening for events."
+            self._logger.debug(
+                f"{get_actor_display_name(self.sensor)} sensor online and listening for events."
             )
 
     def get_invasion_history(self) -> List[Tuple[int, float, str, str, str, float]]:
@@ -485,16 +489,10 @@ class LaneInvasionSensor(object):
         for marking in event.crossed_lane_markings:
             lane_type = str(marking.type).split(".")[-1]
             lane_color = str(marking.color)
-            lane_change = str(marking.lane_change)
 
-            lane_descriptions.append(
-                f"[{lane_color} {lane_type} (Lane Change: {lane_change})]"
-            )
+            lane_descriptions.append(f"{lane_color} {lane_type}")
 
-        self._logger.info(
-            f"Lane invasion detected at {event.timestamp:.2f} s — "
-            f"crossed lane markings: {' & '.join(lane_descriptions)}."
-        )
+        self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
 
         # Store the event sensor data attributes
         for marking in event.crossed_lane_markings:

@@ -42,25 +42,54 @@ class SpectatorCameraPositions(enum.Enum):
     BIRD_EYE_VIEW = 7  # Top-down drone-style view directly above the vehicle
 
 
-def actor_cleanup(world: carla.World) -> None:
+def world_snapshot_tick(world: carla.World, tick_freq: int = 1) -> carla.WorldSnapshot:
+    """
+    Advance the CARLA simulation by a specified number of ticks and return the latest snapshot.
+
+    Args:
+        world (carla.World): The CARLA world instance.
+        tick_freq (int, optional): Number of simulation ticks to advance. Defaults to 1.
+
+    Returns:
+        carla.WorldSnapshot: Snapshot of the world after advancing the simulation.
+
+    Notes:
+        - In synchronous mode, the simulation advances immediately on world.tick().
+        - In asynchronous mode, the simulation waits for the next update via world.wait_for_tick().
+    """
+    world_settings = world.get_settings()
+
+    for _ in range(tick_freq):
+        if world_settings.synchronous_mode:
+            # Advance the simulation immediately (synchronous mode)
+            world.tick()
+            world_snapshot = world.get_snapshot()
+        else:
+            # Wait for the next simulation update (asynchronous mode)
+            world_snapshot = world.wait_for_tick()
+
+    return world_snapshot
+
+
+def world_actor_cleanup(world: carla.World) -> None:
     """
     Safely destroy all active actors in the CARLA world.
-
-    Actors are destroyed by category to ensure proper shutdown of controllers
-    and sensors before removal, avoiding runtime errors or dangling references.
-
-    Handled categories:
-        - controller.* : Walker AI controllers (stopped before destruction)
-        - sensor.*     : Sensors (stopped if listening)
-        - static.*     : Static props
-        - vehicle.*    : Vehicles
-        - walker.*     : Pedestrians
 
     Args:
         world (carla.World): The CARLA world containing the actors.
 
     Returns:
         None
+
+    Notes:
+        Actors are destroyed by category to ensure proper shutdown of controllers and sensors before removal, avoiding runtime errors or dangling references.
+
+        Handled categories:
+        - controller.* : Walker AI controllers (stopped before destruction)
+        - sensor.*     : Sensors (stopped if listening)
+        - static.*     : Static props
+        - vehicle.*    : Vehicles
+        - walker.*     : Pedestrians
     """
 
     def safe_destroy(actor: carla.Actor) -> None:
@@ -100,6 +129,9 @@ def actor_cleanup(world: carla.World) -> None:
                 controller.stop()  # Stop controller before destruction
                 safe_destroy(controller)
 
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
+
     if actor_sensor:
         logging.debug(f"Destroying {len(actor_sensor)} Sensors.")
         for sensor in actor_sensor:
@@ -108,6 +140,9 @@ def actor_cleanup(world: carla.World) -> None:
                     sensor.stop()  # Stop active sensors before destruction
                 safe_destroy(sensor)
 
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
+
     # Uncomment to remove all static props (including default CARLA map assets); this affects visuals only.
     # if actor_static:
     #     logging.debug(f"Destroying {len(actor_static)} Props.")
@@ -115,17 +150,26 @@ def actor_cleanup(world: carla.World) -> None:
     #         if static.is_alive:
     #             safe_destroy(static)
 
+    #     # Wait briefly to ensure the world state stabilizes
+    #     world_tick_snapshot(world)
+
     if actor_vehicle:
         logging.debug(f"Destroying {len(actor_vehicle)} Vehicles.")
         for vehicle in actor_vehicle:
             if vehicle.is_alive:
                 safe_destroy(vehicle)
 
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
+
     if actor_walker:
         logging.debug(f"Destroying {len(actor_walker)} Walkers.")
         for walker in actor_walker:
             if walker.is_alive:
                 safe_destroy(walker)
+
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
 
 def get_route_length(vehicle_agent: BasicAgent) -> float:
@@ -441,8 +485,15 @@ def get_actor_display_name(actor: carla.Actor, truncate: int = 250) -> str:
     Returns:
         str: Formatted actor name, truncated with an ellipsis if it exceeds the limit.
     """
-    # Replace underscores with dots, capitalize each part, and remove the first component (usually 'vehicle', 'walker', etc.)
-    display_name = " ".join(actor.type_id.replace("_", ".").title().split(".")[1:])
+    type_id = actor.type_id
+    type_parts = type_id.split(".")
+
+    if len(type_parts) > 2 and type_parts[0] == "sensor" and type_parts[1] == "other":
+        # Handle 'sensor.other.*' separately (e.g., 'sensor.other.lane_invasion' → 'Lane Invasion')
+        display_name = type_parts[-1].replace("_", " ").title()
+    else:
+        # Handle general actor types (e.g., 'vehicle.tesla.model3' → 'Tesla Model3')
+        display_name = " ".join(type_parts[1:]).replace("_", " ").title()
 
     # Truncate and append an ellipsis if the name exceeds the specified length
     return (

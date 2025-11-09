@@ -21,12 +21,20 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
-    actor_cleanup,
     draw_plan_waypoints,
     generate_custom_route,
+    get_actor_display_name,
     get_route_length,
     set_spectator_camera,
     set_vehicle_lights,
+    world_actor_cleanup,
+    world_snapshot_tick,
+)
+from utils.sensors import (  # noqa: E402
+    CollisionSensor,
+    GNSSSensor,
+    IMUSensor,
+    LaneInvasionSensor,
 )
 
 
@@ -39,8 +47,9 @@ def main():
     SERVER_TIMEOUT = 10.0
     DISPLAY_TELEMETRY = False
     DRAW_PLAN_WAYPOINTS = False
-    CUSTOM_ROUTE_NAVIGATION = False
+    CUSTOM_ROUTE_NAVIGATION = True
     VEHICLE_LIST = []
+    SENSOR_LIST = []
 
     # Store recent waypoints for local planner history
     ego_step_history = deque(maxlen=12)
@@ -49,6 +58,13 @@ def main():
     EGO_DEFAULT_LIGHT_MASK = (
         carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
     )
+
+    # Store ego vehicle sensor objects
+    EGO_COLLISION_SENSOR = None
+    EGO_GNSS_SENSOR = None
+    EGO_IMU_SENSOR = None
+    EGO_LANE_INVASION_SENSOR = None
+
     # NOTE: Custom route indices for the CARLA Town01_Opt map
     # Format: [Start Point, Spawn Point 2, ..., End Point]
     # Intermediate points define route segments; only key points (e.g., after turns) are needed.
@@ -99,11 +115,30 @@ def main():
 
         EGO_ACTIVE = True
         VEHICLE_LIST.append(EGO_VEHICLE)
-        logging.info(f"Ego vehicle ({EGO_VEHICLE.type_id}) spawned at {EGO_ORIGIN}.")
+        logging.info(
+            f"Ego vehicle ({get_actor_display_name(EGO_VEHICLE)}) spawned at {EGO_ORIGIN}."
+        )
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
+
+        # Set up ego vehicle sensors
+        EGO_COLLISION_SENSOR = CollisionSensor(EGO_VEHICLE)
+        EGO_GNSS_SENSOR = GNSSSensor(EGO_VEHICLE)
+        EGO_IMU_SENSOR = IMUSensor(EGO_VEHICLE)
+        EGO_LANE_INVASION_SENSOR = LaneInvasionSensor(EGO_VEHICLE)
+
+        SENSOR_LIST.extend(
+            [
+                EGO_COLLISION_SENSOR.sensor,
+                EGO_GNSS_SENSOR.sensor,
+                EGO_IMU_SENSOR.sensor,
+                EGO_LANE_INVASION_SENSOR.sensor,
+            ]
+        )
+
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
         # Set up ego basic agent
         EGO_AGENT = BasicAgent(
@@ -118,6 +153,9 @@ def main():
         )
         logging.debug("Ego Basic Agent initialized.")
 
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
+
         if not CUSTOM_ROUTE_NAVIGATION:
             # Use A* global route planner for shortest-path navigation
             EGO_AGENT.set_destination(EGO_DESTINATION)
@@ -128,17 +166,17 @@ def main():
 
         ROUTE_TYPE = "custom" if CUSTOM_ROUTE_NAVIGATION else "A*"
         logging.info(
-            f"Ego vehicle navigation initialized ({ROUTE_TYPE} route) toward {EGO_DESTINATION}."
+            f"Ego navigation initialized ({ROUTE_TYPE} route) toward {EGO_DESTINATION}."
         )
         logging.info(f"Total route length: {get_route_length(EGO_AGENT):.2f} m.")
 
-        # Wait briefly to ensure the world is fully initialized
-        for _ in range(1):
-            world.tick()
+        # Wait briefly to ensure the world state stabilizes
+        world_snapshot_tick(world)
 
         # Run game loop
         while True:
-            server_frame_ID = world.tick()
+            world_snapshot = world_snapshot_tick(world)
+            snapshot_frame_ID = world_snapshot.frame
 
             if EGO_ACTIVE:
                 # Set ego agent's target speed based on the maximum predefined OpenDRIVE lane speed limits
@@ -153,7 +191,7 @@ def main():
 
                 # Draw the plan path in the map
                 if DRAW_PLAN_WAYPOINTS:
-                    draw_plan_waypoints(world, EGO_AGENT, server_frame_ID)
+                    draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
 
                 # Compute baseline vehicle controls
                 ego_control = EGO_AGENT.run_step()
@@ -174,7 +212,6 @@ def main():
             if EGO_ACTIVE and EGO_AGENT.done():
                 logging.info("Ego Basic Agent reached destination.")
                 time.sleep(0.017)
-                VEHICLE_LIST.remove(EGO_VEHICLE)
                 EGO_ACTIVE = False
                 break
 
@@ -193,7 +230,14 @@ def main():
             SYNCHRONOUS = False
             logging.debug("Synchronous mode disabled.")
         # Stop and destroy all actors in the world
-        actor_cleanup(world)
+        world_actor_cleanup(world)
+        # Remove ego vehicle
+        VEHICLE_LIST.remove(EGO_VEHICLE)
+        # Remove ego vehicle sensors
+        SENSOR_LIST.remove(EGO_COLLISION_SENSOR.sensor)
+        SENSOR_LIST.remove(EGO_GNSS_SENSOR.sensor)
+        SENSOR_LIST.remove(EGO_IMU_SENSOR.sensor)
+        SENSOR_LIST.remove(EGO_LANE_INVASION_SENSOR.sensor)
         time.sleep(0.5)
 
         logging.info("Simulation stopped.\n")
@@ -203,7 +247,7 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO,
-        format="{asctime} | {levelname:<8} | {name} | {message}",
+        format="{asctime} | {levelname:<8} | {name:<13} | {message}",
         style="{",
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=[logging.StreamHandler(sys.stdout)],
