@@ -20,6 +20,33 @@ Procedures:
 	Run each python script in a new terminal instance
 		Run dynamic_weather.py + generate_traffic.py + manual_control.py
 9) Save all new custom scripts under client\src
+10) Navigate to client\env\etc\conda under which we need to create 2 folders (if not existing) called:
+		activate.d
+		deactivate.d
+	The scripts in this folders will be automatically run by conda upon activation and deactivation of the project environment.
+11) Set the CARLA_ROOT and corresponding PYTHONPATH which will be loaded every time the environment is activated from the terminal in VS Code.
+	Under activate.d:
+		1) Create the following .bat file:
+			@echo off
+			set "CARLA_ROOT=C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"	(Paste the absolute installation path of the CARLA server folder here within the double quotes.)
+			set "PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla"
+		2) Create the following .ps1 file:
+			$env:CARLA_ROOT = "C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"	(Paste the installation path of the CARLA server folder here within the double quotes.)
+			$env:PYTHONPATH = "$env:PYTHONPATH;$env:CARLA_ROOT\PythonAPI\carla"
+		3) Create the following .sh file:
+			#!/bin/bash
+			export CARLA_ROOT="C:/Users/Eng05/Desktop/CARLA_0.9.15/server/WindowsNoEditor"	(Paste the absolute installation path of the CARLA server folder here within the double quotes.)
+			export PYTHONPATH="$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla"
+	Under deactivate.d:
+		1) Create the following .bat file:
+			@echo off
+			set "PYTHONPATH=%PYTHONPATH:%CARLA_ROOT%\PythonAPI\carla;=%"
+		2) Create the following .ps1 file:
+			$env:PYTHONPATH = ($env:PYTHONPATH -split ';' | Where-Object { $_ -ne "$env:CARLA_ROOT\PythonAPI\carla" }) -join ';'
+		3) Create the following .sh file:
+			#!/bin/bash
+			PYTHONPATH=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -v "^$CARLA_ROOT/PythonAPI/carla$" | paste -sd ':' -)
+			export PYTHONPATH
 
 Note:
 1) Make sure the integrated graphics does not interfere with CARLA loading into the discrete GPU. Else CARLA loads into the integrated GPU which will then cause the simulation to crash.
@@ -68,6 +95,7 @@ Note:
 		GlobalDefaultServerGameMode=/Game/Carla/Blueprints/Game/Carl
 16)	"INFO:  streaming client: connection failed: An operation was attempted on something that is not a socket" occurs due to a race condition between the sensor thread and the main thread. The sensor listen() callbacks run asynchronously ('on-the-fly') in separate threads. The destroy() command tells the server to close the network connection (the "socket") for that sensor. This leads to the race condition wherein the main thread tells the sensor to destroy(), and at that exact same moment, the separate sensor thread is just receiving new data and has no idea the sensor is being destroyed.
 	It's just a messy but harmless part of the shutdown process.
+	The occurrence of this race condition can be attributed due to the client FPS being faster than the server FPS or vice versa. A possible solution (not entirely tested or convinced (as it could be interpreted as influencing the results of the visual aspects only), this is merely my thought) would be to tune the time.sleep() at the end of the while loop to ensure that the client FPS (at least nearly) matches (or nearly exceeds) the server FPS (within a threshold)? This will require more testing to be able to find a concrete reasoning.
 17)
 
 

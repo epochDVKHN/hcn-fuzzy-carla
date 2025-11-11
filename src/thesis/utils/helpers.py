@@ -16,6 +16,9 @@ from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.local_planner import RoadOption
 from agents.tools.misc import compute_distance
 
+# Retrieve the module-level logger
+LOGGER = logging.getLogger(__name__)
+
 
 class SpectatorCameraPositions(enum.Enum):
     """
@@ -105,10 +108,11 @@ def world_actor_cleanup(world: carla.World) -> None:
         if actor.is_alive:
             try:
                 actor.destroy()
-            except RuntimeError as e:
-                logging.warning(
-                    f"Handled error destroying Actor ID={actor.id} "
-                    f"Type={actor.type_id}: {e}"
+            except RuntimeError as _:
+                LOGGER.warning(
+                    f"Handled error destroying actor ID={actor.id} "
+                    f"Type={actor.type_id}.",
+                    exc_info=True,
                 )
 
     # Retrieve all actor instances currently present in the world
@@ -121,53 +125,51 @@ def world_actor_cleanup(world: carla.World) -> None:
     actor_vehicle = all_actors.filter("vehicle.*")
     actor_walker = all_actors.filter("walker.*")
 
+    # Wait briefly to ensure the world state stabilizes
+    world_snapshot_tick(world)
+
     # Destroy actors category by category, ensuring proper shutdown where necessary
     if actor_controller:
-        logging.debug(f"Destroying {len(actor_controller)} WalkerAIControllers.")
+        LOGGER.debug(f"Destroying {len(actor_controller)} WalkerAIControllers.")
         for controller in actor_controller:
             if controller.is_alive:
                 controller.stop()  # Stop controller before destruction
                 safe_destroy(controller)
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
     if actor_sensor:
-        logging.debug(f"Destroying {len(actor_sensor)} Sensors.")
+        LOGGER.debug(f"Destroying {len(actor_sensor)} Sensors.")
         for sensor in actor_sensor:
             if sensor.is_alive:
                 if sensor.is_listening():
                     sensor.stop()  # Stop active sensors before destruction
                 safe_destroy(sensor)
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
     # Uncomment to remove all static props (including default CARLA map assets); this affects visuals only.
     # if actor_static:
-    #     logging.debug(f"Destroying {len(actor_static)} Props.")
+    #     logger.debug(f"Destroying {len(actor_static)} Props.")
     #     for static in actor_static:
     #         if static.is_alive:
     #             safe_destroy(static)
-
     #     # Wait briefly to ensure the world state stabilizes
-    #     world_tick_snapshot(world)
+    #     world_snapshot_tick(world)
 
     if actor_vehicle:
-        logging.debug(f"Destroying {len(actor_vehicle)} Vehicles.")
+        LOGGER.debug(f"Destroying {len(actor_vehicle)} Vehicles.")
         for vehicle in actor_vehicle:
             if vehicle.is_alive:
                 safe_destroy(vehicle)
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
     if actor_walker:
-        logging.debug(f"Destroying {len(actor_walker)} Walkers.")
+        LOGGER.debug(f"Destroying {len(actor_walker)} Walkers.")
         for walker in actor_walker:
             if walker.is_alive:
                 safe_destroy(walker)
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
@@ -501,3 +503,59 @@ def get_actor_display_name(actor: carla.Actor, truncate: int = 250) -> str:
         if len(display_name) > truncate
         else display_name
     )
+
+
+def update_vehicle_physics(actor: carla.Vehicle) -> None:
+    """
+    Configure the physics control of a CARLA vehicle to use automatic transmission and sweep wheel collisions.
+
+    Args:
+        actor (carla.Vehicle): The vehicle actor to update.
+
+    Returns:
+        None
+    """
+    if not isinstance(actor, carla.Vehicle):
+        # Skip if the actor is not a vehicle
+        LOGGER.warning(
+            f"Skipping physics update: {actor.type_id} is not a carla.Vehicle."
+        )
+        return
+
+    vehicle_physics_control = actor.get_physics_control()
+
+    # Enable automatic gearbox
+    vehicle_physics_control.use_gear_autobox = True
+    # Use sweep-based wheel collision (more accurate than raycast-based)
+    vehicle_physics_control.use_sweep_wheel_collision = True
+
+    actor.apply_physics_control(vehicle_physics_control)
+
+
+def compute_server_fps(fixed_delta_seconds: float) -> float:
+    """
+    Return the server's frames per second (FPS) from a fixed timestep.
+
+    Args:
+        fixed_delta_seconds (float): Time in seconds between server updates.
+
+    Returns:
+        float: Calculated FPS value.
+    """
+    # Avoid division by zero by clamping to a minimal positive value
+    return 1.0 / max(1e-9, fixed_delta_seconds)
+
+
+def compute_client_fps(current_time: float, previous_time: float) -> float:
+    """
+    Return the client's frames per second (FPS) from two timestamps.
+
+    Args:
+        current_time (float): Current timestamp in seconds.
+        previous_time (float): Previous timestamp in seconds.
+
+    Returns:
+        float: Computed FPS value.
+    """
+    # Compute time difference and clamp to avoid division by zero
+    return 1.0 / max(1e-9, current_time - previous_time)

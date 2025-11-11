@@ -50,7 +50,7 @@ def main():
         world = client.load_world(
             map_name=MAP_NAME, reset_settings=True, map_layers=carla.MapLayer.All
         )
-        logging.info(f"Map '{MAP_NAME}' loaded.")
+        logging.info(f"{MAP_NAME} map loaded.")
 
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
@@ -60,7 +60,7 @@ def main():
             cloudiness=30.0,
             precipitation=0.0,
             precipitation_deposits=0.0,
-            wind_intensity=14.0,
+            wind_intensity=15.0,
             sun_azimuth_angle=180.0,
             sun_altitude_angle=15.0,
             fog_density=3.0,
@@ -70,6 +70,7 @@ def main():
             scattering_intensity=0.3,
             mie_scattering_scale=0.05,
             rayleigh_scattering_scale=0.0331,
+            dust_storm=0.0,
         )
 
         # Update the environment weather

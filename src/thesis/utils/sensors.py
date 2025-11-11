@@ -155,6 +155,7 @@ class GNSSSensor(object):
         self.sensor = None
         self._parent = parent_actor
         self._logger = logging.getLogger(__name__)
+        self._gnss_tick = 1.0 / 10.0  # Sampling rate
 
         # Initialize sensor data attributes
         self.lat = 0.0
@@ -195,7 +196,7 @@ class GNSSSensor(object):
 
         if gnss_blueprint.has_attribute("sensor_tick"):
             gnss_blueprint.set_attribute(
-                "sensor_tick", "0.0"
+                "sensor_tick", str(self._gnss_tick)
             )  # Sensor tick interval in simulation seconds
 
         # Spawn the sensor
@@ -212,7 +213,7 @@ class GNSSSensor(object):
             lambda step: GNSSSensor._on_gnss_step_callback(weak_self, step)
         )
         self._logger.debug(
-            f"{get_actor_display_name(self.sensor)} sensor online and listening every simulation step."
+            f"{get_actor_display_name(self.sensor)} sensor online and listening at {1 / self._gnss_tick:.0f} Hz (noise-free)."
         )
 
     @staticmethod
@@ -263,6 +264,7 @@ class IMUSensor(object):
         self.sensor = None
         self._parent = parent_actor
         self._logger = logging.getLogger(__name__)
+        self._imu_tick = 1.0 / 100.0  # Sampling rate
 
         # Initialize sensor data attributes
         self.accelerometer = (0.0, 0.0, 0.0)
@@ -321,7 +323,7 @@ class IMUSensor(object):
 
         if imu_blueprint.has_attribute("sensor_tick"):
             imu_blueprint.set_attribute(
-                "sensor_tick", "0.0"
+                "sensor_tick", str(self._imu_tick)
             )  # Sensor tick interval in simulation seconds
 
         # Spawn the sensor
@@ -338,7 +340,7 @@ class IMUSensor(object):
             lambda step: IMUSensor._on_imu_step_callback(weak_self, step)
         )
         self._logger.debug(
-            f"{get_actor_display_name(self.sensor)} sensor online and listening every simulation step."
+            f"{get_actor_display_name(self.sensor)} sensor online and listening at {1 / self._imu_tick:.0f} Hz (noise-free)."
         )
 
     @staticmethod
@@ -490,7 +492,7 @@ class LaneInvasionSensor(object):
             lane_type = str(marking.type).split(".")[-1]
             lane_color = str(marking.color)
 
-            lane_descriptions.append(f"{lane_color} {lane_type}")
+            lane_descriptions.append(f"'{lane_color} {lane_type}'")
 
         self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
 
