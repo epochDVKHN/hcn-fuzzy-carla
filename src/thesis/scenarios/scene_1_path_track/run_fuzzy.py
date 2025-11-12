@@ -5,7 +5,6 @@ from collections import deque
 from pathlib import Path
 
 import carla
-from agents.navigation.basic_agent import BasicAgent
 
 # Include the project root for relative module imports
 FILE_PATH = Path(__file__).resolve()
@@ -13,6 +12,7 @@ PROJECT_ROOT = FILE_PATH.parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
+from custom_agents.fuzzy_agent import FuzzyAgent  # noqa: E402
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     compute_client_fps,
@@ -138,7 +138,7 @@ def main():
         world_snapshot_tick(world)
 
         # ----------------- Initialize ego agent -----------------
-        EGO_AGENT = BasicAgent(
+        EGO_AGENT = FuzzyAgent(
             vehicle=EGO_VEHICLE,
             target_speed=50,
             opt_dict={

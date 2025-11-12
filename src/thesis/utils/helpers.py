@@ -510,7 +510,7 @@ def update_vehicle_physics(actor: carla.Vehicle) -> None:
     Configure the physics control of a CARLA vehicle to use automatic transmission and sweep wheel collisions.
 
     Args:
-        actor (carla.Vehicle): The vehicle actor to update.
+        actor (carla.Vehicle): Vehicle actor whose physics control will be updated.
 
     Returns:
         None
@@ -523,13 +523,12 @@ def update_vehicle_physics(actor: carla.Vehicle) -> None:
         return
 
     vehicle_physics_control = actor.get_physics_control()
-
     # Enable automatic gearbox
     vehicle_physics_control.use_gear_autobox = True
     # Use sweep-based wheel collision (more accurate than raycast-based)
     vehicle_physics_control.use_sweep_wheel_collision = True
-
     actor.apply_physics_control(vehicle_physics_control)
+    actor.set_simulate_physics(True)
 
 
 def compute_server_fps(fixed_delta_seconds: float) -> float:

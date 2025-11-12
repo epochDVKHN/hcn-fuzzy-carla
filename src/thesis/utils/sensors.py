@@ -4,9 +4,6 @@ sensors.py
 Sensor wrapper classes for CARLA simulation.
 
 This module provides stateful wrappers for CARLA's asynchronous sensors, including collision, lane invasion, GNSS, and IMU sensors. Each class offers a clean, event-driven interface for attaching sensors to actors and accessing their latest data or event history in a structured form.
-
-Adapted from:
-    https://github.com/carla-simulator/carla/blob/master/PythonAPI/examples/manual_control.py
 """
 
 import logging

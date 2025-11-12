@@ -51,13 +51,10 @@ def main():
         map = world.get_map()
         spectator = world.get_spectator()
         spawn_points = map.get_spawn_points()
-
-        # Get the CARLA Town Map Name
         TOWN_MAP_NAME = map.name.rsplit("/", 1)[-1]
 
         # Draw numeric labels at all spawn point locations
         draw_spawn_waypoints(world, spawn_points, DISPLAY_TIME)
-
         logging.info(f"{TOWN_MAP_NAME} spawn points loaded.")
 
         # Set spectator to top-down view of a reference spawn point
@@ -67,7 +64,6 @@ def main():
             carla.Rotation(pitch=-90, yaw=reference_point.rotation.yaw, roll=0),
         )
         spectator.set_transform(SPECTATOR_TRANSFORM)
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 

@@ -51,7 +51,6 @@ def main():
             map_name=MAP_NAME, reset_settings=True, map_layers=carla.MapLayer.All
         )
         logging.info(f"{MAP_NAME} map loaded.")
-
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
@@ -62,35 +61,27 @@ def main():
             precipitation_deposits=0.0,
             wind_intensity=15.0,
             sun_azimuth_angle=180.0,
-            sun_altitude_angle=15.0,
+            sun_altitude_angle=18.0,
             fog_density=3.0,
             fog_distance=40.0,
             wetness=0.0,
             fog_falloff=0.5,
             scattering_intensity=0.3,
-            mie_scattering_scale=0.05,
+            mie_scattering_scale=0.08,
             rayleigh_scattering_scale=0.0331,
             dust_storm=0.0,
         )
-
-        # Update the environment weather
         world.set_weather(weather)
         logging.info("Weather parameters updated.")
-
-        # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
         # Retrieve all traffic light actors from the simulation world
         traffic_lights = world.get_actors().filter("traffic.traffic_light")
-
         # Disable and freeze all traffic lights
         for light in traffic_lights:
             light.set_state(TRAFFIC_LIGHT_STATE)
             light.freeze(TRAFFIC_LIGHT_FREEZE)
-
         logging.info("Traffic lights disabled.")
-
-        # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
     except Exception as _:
