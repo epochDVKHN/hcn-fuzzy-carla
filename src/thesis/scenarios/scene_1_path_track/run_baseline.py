@@ -31,6 +31,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     compute_client_fps,
+    compute_lateral_angular_errors,
     compute_server_fps,
     draw_plan_waypoints,
     generate_custom_route,
@@ -70,7 +71,6 @@ def main():
     SYNCHRONOUS = False
     HOST = "localhost"
     PORT = 2000
-    EGO_ACTIVE = False
     SERVER_DELTA_SECONDS = 1.0 / 20  # Fixed delta for synchronous mode
     SERVER_TIMEOUT = 10.0
     CLIENT_DELTA_SLEEP = (
@@ -82,6 +82,7 @@ def main():
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors
     EGO_TIMEOUT = 2.5  # Pause duration at simulation start
+    LOG_FPS_FREQ = 300  # Frequency of FPS logging
 
     # Store recent ego waypoints history for light logic
     ego_step_history = deque(maxlen=12)
@@ -139,8 +140,6 @@ def main():
         EGO_VEHICLE = world.spawn_actor(EGO_BP, EGO_START_POINT)
         EGO_VEHICLE.set_light_state(carla.VehicleLightState(EGO_DEFAULT_LIGHT_MASK))
         EGO_VEHICLE.show_debug_telemetry(DISPLAY_TELEMETRY)
-
-        EGO_ACTIVE = True
         VEHICLE_LIST.append(EGO_VEHICLE)
         LOGGER.info(
             f"Ego vehicle [{get_actor_display_name(EGO_VEHICLE)}] spawned at {EGO_ORIGIN}."
@@ -205,50 +204,56 @@ def main():
             world_snapshot = world_snapshot_tick(world)
             snapshot_frame_ID = world_snapshot.frame
 
-            if EGO_ACTIVE:
-                # Update agent's speed according to OpenDRIVE lane speed limits
-                EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
-
-                # Update spectator camera
-                spectator_transform = set_spectator_camera(
-                    EGO_VEHICLE,
-                    SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
-                )
-                spectator.set_transform(spectator_transform)
-
-                # Draw planned route
-                if DRAW_PLAN_WAYPOINTS:
-                    draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
-
-                # Compute vehicle control: pause at start for EGO_TIMEOUT seconds
-                if time.time() - EGO_START_TIME >= EGO_TIMEOUT:
-                    ego_control = EGO_AGENT.run_step()
-                else:
-                    # Pause ego vehicle motion
-                    ego_control = carla.VehicleControl(
-                        throttle=0.0,
-                        brake=1.0,
-                        steer=0.0,
-                    )
-
-                # Update vehicle lights
-                ego_new_light_mask = set_vehicle_lights(
-                    EGO_DEFAULT_LIGHT_MASK,
-                    ego_control,
-                    EGO_AGENT,
-                    ego_step_history,
-                )
-                EGO_VEHICLE.set_light_state(ego_new_light_mask)
-
-                # Apply vehicle control
-                EGO_VEHICLE.apply_control(ego_control)
-
             # Terminate loop when ego reaches destination
-            if EGO_ACTIVE and EGO_AGENT.done():
+            if EGO_AGENT.done():
                 LOGGER.info("Ego [Basic Agent] reached destination.")
                 time.sleep(CLIENT_DELTA_SLEEP)
-                EGO_ACTIVE = False
                 break
+
+            # Update agent's speed according to OpenDRIVE lane speed limits
+            EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
+
+            # Update spectator camera
+            spectator_transform = set_spectator_camera(
+                EGO_VEHICLE,
+                SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
+            )
+            spectator.set_transform(spectator_transform)
+
+            # Draw planned route
+            if DRAW_PLAN_WAYPOINTS:
+                draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
+
+            # Compute vehicle control: pause at start for EGO_TIMEOUT seconds
+            if time.time() - EGO_START_TIME >= EGO_TIMEOUT:
+                ego_control = EGO_AGENT.run_step()
+
+                # Calculate lateral offset and heading error for the vehicle
+                lateral_error, angular_error = compute_lateral_angular_errors(EGO_AGENT)
+                if snapshot_frame_ID % 10 == 0:
+                    print(
+                        f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"
+                    )
+
+            else:
+                # Pause ego vehicle motion
+                ego_control = carla.VehicleControl(
+                    throttle=0.0,
+                    brake=1.0,
+                    steer=0.0,
+                )
+
+            # Update vehicle lights
+            ego_new_light_mask = set_vehicle_lights(
+                EGO_DEFAULT_LIGHT_MASK,
+                ego_control,
+                EGO_AGENT,
+                ego_step_history,
+            )
+            EGO_VEHICLE.set_light_state(ego_new_light_mask)
+
+            # Apply vehicle control
+            EGO_VEHICLE.apply_control(ego_control)
 
             # Sleep to improve visualization smoothness
             time.sleep(CLIENT_DELTA_SLEEP)
@@ -257,7 +262,7 @@ def main():
             current_time = time.time()
             client_fps = compute_client_fps(current_time, last_time)
             last_time = current_time
-            if snapshot_frame_ID % 100 == 0:
+            if snapshot_frame_ID % LOG_FPS_FREQ == 0:
                 LOGGER.debug(
                     f"FPS [Server = {server_fps:.1f}, Client = {client_fps:.1f}]."
                 )

@@ -24,5 +24,6 @@ __pycache__/
 /src/thesis/results/
 /src/thesis/report/
 /src/thesis/temp.py
+/src/thesis/temp_test.py
 /src/thesis/temp_logger.py
 

@@ -12,7 +12,7 @@ PROJECT_ROOT = FILE_PATH.parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from custom_agents.fuzzy_agent import FuzzyAgent  # noqa: E402
+from custom_agents.fuzzy_agent import FuzzyControlAgent  # noqa: E402
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     compute_client_fps,
@@ -40,18 +40,16 @@ def main():
     SYNCHRONOUS = False
     HOST = "localhost"
     PORT = 2000
-    EGO_ACTIVE = False
     SERVER_DELTA_SECONDS = 1.0 / 20  # Fixed delta for synchronous mode
     SERVER_TIMEOUT = 10.0
-    CLIENT_DELTA_SLEEP = (
-        0.02  # Client-side sleep to improve FPS, recommended range [0.02–0.04] seconds
-    )
+    CLIENT_DELTA_SLEEP = 0.02  # Client-side sleep to improve visualization smoothness, recommended range [0.02–0.04] seconds
     DISPLAY_TELEMETRY = False  # Show telemetry info on vehicle
     DRAW_PLAN_WAYPOINTS = False  # Visualize local route plan
     CUSTOM_ROUTE_NAVIGATION = False  # Use predefined route if True
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors
     EGO_TIMEOUT = 2.5  # Pause duration at simulation start
+    LOG_FPS_FREQ = 300  # Frequency of FPS logging
 
     # Store recent ego waypoints history for light logic
     ego_step_history = deque(maxlen=12)
@@ -109,8 +107,6 @@ def main():
         EGO_VEHICLE = world.spawn_actor(EGO_BP, EGO_START_POINT)
         EGO_VEHICLE.set_light_state(carla.VehicleLightState(EGO_DEFAULT_LIGHT_MASK))
         EGO_VEHICLE.show_debug_telemetry(DISPLAY_TELEMETRY)
-
-        EGO_ACTIVE = True
         VEHICLE_LIST.append(EGO_VEHICLE)
         LOGGER.info(
             f"Ego vehicle [{get_actor_display_name(EGO_VEHICLE)}] spawned at {EGO_ORIGIN}."
@@ -138,17 +134,22 @@ def main():
         world_snapshot_tick(world)
 
         # ----------------- Initialize ego agent -----------------
-        EGO_AGENT = FuzzyAgent(
+        EGO_AGENT = FuzzyControlAgent(
             vehicle=EGO_VEHICLE,
-            target_speed=50,
+            target_speed=30,
             opt_dict={
-                "max_throttle": 0.75,  # Default value
-                "max_brake": 0.5,  # Default value
-                "max_steering": 0.8,  # Default value
+                "max_throttle": 1.0,  # Custom value
+                "max_brake": 1.0,  # Custom value
+                "max_steering": 1.0,  # Custom value
                 "ignore_traffic_lights": True,
                 "ignore_stop_signs": True,
                 "ignore_vehicles": False,
                 "follow_speed_limits": False,
+                "lateral_control_dict": {
+                    "K_P": 4.0,
+                    "K_I": 0.04,
+                    "K_D": 0.08,
+                },
             },
         )
         LOGGER.debug("Ego [Fuzzy Agent] initialized.")
@@ -175,50 +176,48 @@ def main():
             world_snapshot = world_snapshot_tick(world)
             snapshot_frame_ID = world_snapshot.frame
 
-            if EGO_ACTIVE:
-                # Update agent's speed according to OpenDRIVE lane speed limits
-                EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
-
-                # Update spectator camera
-                spectator_transform = set_spectator_camera(
-                    EGO_VEHICLE,
-                    SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
-                )
-                spectator.set_transform(spectator_transform)
-
-                # Draw planned route
-                if DRAW_PLAN_WAYPOINTS:
-                    draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
-
-                # Compute vehicle control: pause at start for EGO_TIMEOUT seconds
-                if time.time() - EGO_START_TIME >= EGO_TIMEOUT:
-                    ego_control = EGO_AGENT.run_step()
-                else:
-                    # Pause ego vehicle motion
-                    ego_control = carla.VehicleControl(
-                        throttle=0.0,
-                        brake=1.0,
-                        steer=0.0,
-                    )
-
-                # Update vehicle lights
-                ego_new_light_mask = set_vehicle_lights(
-                    EGO_DEFAULT_LIGHT_MASK,
-                    ego_control,
-                    EGO_AGENT,
-                    ego_step_history,
-                )
-                EGO_VEHICLE.set_light_state(ego_new_light_mask)
-
-                # Apply vehicle control
-                EGO_VEHICLE.apply_control(ego_control)
-
             # Terminate loop when ego reaches destination
-            if EGO_ACTIVE and EGO_AGENT.done():
-                LOGGER.info("Ego [Basic Agent] reached destination.")
+            if EGO_AGENT.done():
+                LOGGER.info("Ego [Fuzzy Agent] reached destination.")
                 time.sleep(CLIENT_DELTA_SLEEP)
-                EGO_ACTIVE = False
                 break
+
+            # Update agent's speed according to OpenDRIVE lane speed limits
+            # EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
+
+            # Update spectator camera
+            spectator_transform = set_spectator_camera(
+                EGO_VEHICLE,
+                SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
+            )
+            spectator.set_transform(spectator_transform)
+
+            # Draw planned route
+            if DRAW_PLAN_WAYPOINTS:
+                draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
+
+            # Compute vehicle control: pause at start for EGO_TIMEOUT seconds
+            if time.time() - EGO_START_TIME >= EGO_TIMEOUT:
+                ego_control = EGO_AGENT.run_step(snapshot_frame_ID)
+            else:
+                # Pause ego vehicle motion
+                ego_control = carla.VehicleControl(
+                    throttle=0.0,
+                    brake=1.0,
+                    steer=0.0,
+                )
+
+            # Update vehicle lights
+            ego_new_light_mask = set_vehicle_lights(
+                EGO_DEFAULT_LIGHT_MASK,
+                ego_control,
+                EGO_AGENT,
+                ego_step_history,
+            )
+            EGO_VEHICLE.set_light_state(ego_new_light_mask)
+
+            # Apply vehicle control
+            EGO_VEHICLE.apply_control(ego_control)
 
             # Sleep to improve visualization smoothness
             time.sleep(CLIENT_DELTA_SLEEP)
@@ -227,7 +226,7 @@ def main():
             current_time = time.time()
             client_fps = compute_client_fps(current_time, last_time)
             last_time = current_time
-            if snapshot_frame_ID % 100 == 0:
+            if snapshot_frame_ID % LOG_FPS_FREQ == 0:
                 LOGGER.debug(
                     f"FPS [Server = {server_fps:.1f}, Client = {client_fps:.1f}]."
                 )

@@ -1,16 +1,10 @@
 import enum
 import logging
 import math
-import sys
 from typing import Deque, List, Tuple
 
 import carla
-
-# NOTE: UPDATE the vehicle_plan below to YOUR CARLA 0.9.15 installation folder containing 'PythonAPI\carla'.
-sys.path.append(
-    r"C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor\PythonAPI\carla"
-)
-
+import numpy as np
 from agents.navigation.basic_agent import BasicAgent
 from agents.navigation.global_route_planner import GlobalRoutePlanner
 from agents.navigation.local_planner import RoadOption
@@ -558,3 +552,63 @@ def compute_client_fps(current_time: float, previous_time: float) -> float:
     """
     # Compute time difference and clamp to avoid division by zero
     return 1.0 / max(1e-9, current_time - previous_time)
+
+
+def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
+    """
+    Compute lateral and angular errors of a BasicAgent instance relative to its target waypoint.
+
+    The lateral error is the signed distance from the vehicle to the target waypoint along the waypoint's right vector.
+    The angular error is the signed angle (in degrees) between the vehicle's heading and the vector pointing from the vehicle to the target waypoint.
+
+    Args:
+        agent (BasicAgent): The agent whose errors are computed.
+
+    Returns:
+        Tuple[]: Lateral error and angular error (degrees).
+    """
+    # Get vehicle transform and location
+    vehicle = agent._vehicle
+    vehicle_transform = vehicle.get_transform()
+    vehicle_location = vehicle_transform.location
+
+    # Get target waypoint and path offset from local planner
+    local_planner = agent.get_local_planner()
+    target_waypoint = local_planner.target_waypoint
+    path_offset = local_planner._offset
+
+    # Compute target waypoint location, applying lateral offset if present
+    if path_offset != 0.0:
+        waypoint_transform = target_waypoint.transform
+        waypoint_right_vector = waypoint_transform.get_right_vector()
+        waypoint_location = waypoint_transform.location + carla.Location(
+            x=path_offset * waypoint_right_vector.x,
+            y=path_offset * waypoint_right_vector.y,
+        )
+    else:
+        waypoint_location = target_waypoint.transform.location
+
+    # Vehicle forward vector (x, y plane)
+    vehicle_vector_3D = vehicle_transform.get_forward_vector()
+    vehicle_vector = np.array([vehicle_vector_3D.x, vehicle_vector_3D.y, 0.0])
+
+    # Vector from vehicle to waypoint (x, y plane)
+    waypoint_vector_3D = waypoint_location - vehicle_location
+    waypoint_vector = np.array([waypoint_vector_3D.x, waypoint_vector_3D.y, 0.0])
+
+    # Lateral error: cross product z-component gives signed distance
+    lateral_error = np.cross(vehicle_vector, waypoint_vector)[2]
+
+    # Angular error: signed angle between vehicle heading and waypoint vector
+    norm_product = np.linalg.norm(waypoint_vector) * np.linalg.norm(vehicle_vector)
+    if norm_product == 0.0:
+        angle_rad = 0.0
+    else:
+        dot = np.dot(vehicle_vector, waypoint_vector)
+        angle_rad = math.acos(np.clip(dot / norm_product, -1.0, 1.0))
+    # Flip sign of angular error if waypoint is to the right
+    if lateral_error < 0.0:
+        angle_rad *= -1.0
+    angular_error = math.degrees(angle_rad)
+
+    return lateral_error, angular_error
