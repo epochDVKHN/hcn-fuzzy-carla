@@ -1,9 +1,11 @@
 import logging
 import sys
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 import carla
 from agents.navigation.basic_agent import BasicAgent
+from agents.tools.misc import get_speed
 
 # Retrieve the module-level logger
 LOGGER = logging.getLogger(__name__)
@@ -14,7 +16,7 @@ PROJECT_ROOT = FILE_PATH.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from models.fuzzy_lateral.definitions import LowSpeedControl  # noqa: E402
+from models.lateral_control.fuzzy_controller import FuzzyLateralGeometricControl  # noqa: E402
 from utils.helpers import compute_lateral_angular_errors  # noqa: E402
 
 
@@ -23,38 +25,92 @@ class FuzzyControlAgent(BasicAgent):
         self,
         vehicle: carla.Vehicle,
         target_speed: float = 20,
-        opt_dict: dict = {},
+        opt_dict: Optional[Dict[str, Any]] = None,
         debug: bool = False,
     ) -> None:
+        if opt_dict is None:
+            opt_dict = {}
         super().__init__(vehicle, target_speed, opt_dict, debug)
         self._vehicle = vehicle
-        self._steer_control = LowSpeedControl()
         self._debug = debug
+        self._lateral_controller = FuzzyLateralGeometricControl()
+        self._control_kwargs = {
+            "throttle": 0.0,
+            "brake": 0.0,
+            "steer": 0.0,
+            "hand_brake": False,
+            "reverse": False,
+            "manual_gear_shift": False,
+            "gear": 0,
+        }
 
     def run_step(self, frame_ID: int) -> carla.VehicleControl:
         pid_control = self._local_planner.run_step(self._debug)
+        current_speed = get_speed(self._vehicle)
 
         # Calculate lateral offset and heading error for the vehicle
         lateral_error, angular_error = compute_lateral_angular_errors(self)
 
-        fuzzy_steer = self._steer_control.compute_vehicle_control(
-            lateral_error=lateral_error,
-            angular_error=angular_error,
-        )
+        # Get road curvature, i.e. whether the vehicle is on a curved road or driving on a straight road
+        angle_diff = self._get_road_curvature()
 
-        if frame_ID % 10 == 0:
+        # Compute steering control
+        steer_control = self._lateral_controller.compute_steer_control(
+            lateral_error, angular_error, angle_diff, current_speed
+        )
+        self._control_kwargs.update(steer_control)
+
+        if frame_ID % 5 == 0:
+            # print(
+            #     f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {self._control_kwargs['steer']:.2f} | (Kv): {self._lateral_controller._speed_sensitivity_factor} | Angle diff: {angle_diff}"
+            # )
             print(
-                f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {fuzzy_steer:.2f}"
+                f"Angle diff: {angle_diff} | Steer: {self._control_kwargs['steer']:.2f} | (Kv): {self._lateral_controller._speed_sensitivity_factor}"
             )
+            # pass
 
-        fuzzy_control = carla.VehicleControl(
-            throttle=pid_control.throttle,
-            brake=pid_control.brake,
-            steer=pid_control.steer,
-            # steer=fuzzy_steer,
-            hand_brake=pid_control.hand_brake,
-            manual_gear_shift=pid_control.manual_gear_shift,
-            gear=pid_control.gear,
+        agent_control = carla.VehicleControl(**self._control_kwargs)
+
+        agent_control.throttle = pid_control.throttle
+        agent_control.brake = pid_control.brake
+        # agent_control.steer = pid_control.steer
+
+        return agent_control
+
+    def _get_road_curvature(self, lookahead_steps: int = 3) -> float:
+        # Get the future waypoints
+        future_node = self._local_planner.get_incoming_waypoint_and_direction(
+            steps=lookahead_steps
         )
+        # Assume straight if no road ahead
+        if future_node is None or future_node[0] is None:
+            return 0.0
+        else:
+            future_waypoint = future_node[0]
+            # future_road_option = future_node[1]
 
-        return fuzzy_control
+        # Get current waypoint from the local planner
+        current_waypoint = self._local_planner.target_waypoint
+        # current_road_option = self._local_planner.target_road_option
+
+        # Get waypoint yaws
+        current_yaw = round(current_waypoint.transform.rotation.yaw, 0)
+        future_yaw = round(future_waypoint.transform.rotation.yaw, 0)
+
+        # Calculate signed angle difference ("shortest angle")
+        angle_diff = (future_yaw - current_yaw + 180) % 360 - 180
+
+        # if angle_diff > 0:
+        #     print(
+        #         f"Right turn: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
+        #     )
+        # elif angle_diff < 0:
+        #     print(
+        #         f"Left turn: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
+        #     )
+        # else:
+        #     print(
+        #         f"Straight: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
+        #     )
+
+        return angle_diff

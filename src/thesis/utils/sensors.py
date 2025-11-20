@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.helpers import get_actor_display_name  # noqa: E402
 
 
-class CollisionSensor(object):
+class CollisionSensor:
     """
     Stateful wrapper around CARLA's collision sensor for retrieving collisions between its parent and other actors.
 
@@ -107,9 +107,9 @@ class CollisionSensor(object):
             collision_impulse.x**2 + collision_impulse.y**2 + collision_impulse.z**2
         )
 
-        self._logger.warning(
-            f"Collided with {actor_type} (Impact Intensity: {collision_intensity:.2f} N·s)."
-        )
+        # self._logger.warning(
+        #     f"Collided with {actor_type} (Impact Intensity: {collision_intensity:.2f} N·s)."
+        # )
 
         # Store the event sensor data attributes
         self.history.append(
@@ -129,7 +129,7 @@ class CollisionSensor(object):
             self.history.pop(0)
 
 
-class GNSSSensor(object):
+class GNSSSensor:
     """
     Stateful wrapper around CARLA's GNSS sensor for retrieving the geolocation of the sensor.
 
@@ -241,7 +241,7 @@ class GNSSSensor(object):
         self.alt = step.altitude
 
 
-class IMUSensor(object):
+class IMUSensor:
     """
     Stateful wrapper for an IMU sensor.
     """
@@ -400,7 +400,7 @@ class IMUSensor(object):
         self.compass = math.degrees(step.compass)
 
 
-class LaneInvasionSensor(object):
+class LaneInvasionSensor:
     """
     Stateful wrapper around CARLA's lane invasion sensor to monitor and record lane invasion events for a CARLA vehicle.
 
@@ -490,7 +490,7 @@ class LaneInvasionSensor(object):
 
             lane_descriptions.append(f"'{lane_color} {lane_type}'")
 
-        self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
+        # self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
 
         # Store the event sensor data attributes
         for marking in event.crossed_lane_markings:

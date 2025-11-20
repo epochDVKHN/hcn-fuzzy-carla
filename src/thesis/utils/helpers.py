@@ -48,7 +48,7 @@ def world_snapshot_tick(world: carla.World, tick_freq: int = 1) -> carla.WorldSn
         tick_freq (int, optional): Number of simulation ticks to advance. Defaults to 1.
 
     Returns:
-        carla.WorldSnapshot: Snapshot of the world after advancing the simulation.
+        world_snapshot (carla.WorldSnapshot): Snapshot of the world after advancing the simulation.
 
     Notes:
         - In synchronous mode, the simulation advances immediately on world.tick().
@@ -74,9 +74,6 @@ def world_actor_cleanup(world: carla.World) -> None:
 
     Args:
         world (carla.World): The CARLA world containing the actors.
-
-    Returns:
-        None
 
     Notes:
         Actors are destroyed by category to ensure proper shutdown of controllers and sensors before removal, avoiding runtime errors or dangling references.
@@ -180,7 +177,7 @@ def get_route_length(vehicle_agent: BasicAgent) -> float:
         agent (BasicAgent): The CARLA agent whose route length is calculated.
 
     Returns:
-        float: Total route length in meters.
+        route_length (float): Total route length in meters.
     """
     route_length = 0.0
     # List of [(Waypoint, RoadOption), ...]
@@ -209,10 +206,6 @@ def draw_spawn_waypoints(
         world (carla.World): The CARLA simulation world instance.
         spawn_waypoints (List[carla.Transform]): List of spawn waypoint transforms.
         display_time (float, optional): Duration (in seconds) for which labels remain visible. Defaults to 120.
-
-    Returns:
-        None
-
     """
     for i, spawn_waypoint in enumerate(spawn_waypoints):
         # Draw index label above each spawn waypoint
@@ -242,7 +235,7 @@ def set_vehicle_lights(
             Recent waypoint and maneuver history from the local planner.
 
     Returns:
-        carla.VehicleLightState: Updated light state including brake, reverse, and turn indicators.
+        vehicle_updated_lights (carla.VehicleLightState): Updated light state including brake, reverse, and turn indicators.
     """
     vehicle_local_planner = vehicle_agent.get_local_planner()
     vehicle_updated_lights = vehicle_default_lights
@@ -300,7 +293,7 @@ def set_spectator_camera(
         camera_position (SpectatorCameraPositions): The desired camera viewpoint preset.
 
     Returns:
-        carla.Transform: The computed world-space transform for the spectator camera.
+        camera_transform (carla.Transform): The computed world-space transform for the spectator camera.
 
     Raises:
         TypeError: If `camera_position` is not a SpectatorCameraPositions enum value.
@@ -393,9 +386,6 @@ def draw_plan_waypoints(
         display_nearest_points (int, optional): Number of waypoints to draw. Defaults to 30.
         display_height (float, optional): Height offset for visualization. Defaults to 0.5.
         display_time (float, optional): Duration (s) each waypoint is displayed. Defaults to 1.0.
-
-    Returns:
-        None
     """
     # Only draw every `display_freq` frames to reduce overhead
     if frame_num % display_freq != 0:
@@ -444,7 +434,7 @@ def generate_custom_route(
         sampling_resolution (float, optional): Distance between sampled waypoints (meters). Defaults to 2.0.
 
     Returns:
-        List[Tuple[carla.Waypoint, RoadOption]]: Ordered list of (waypoint, road option) tuples forming the full route.
+        route_plan (List[Tuple[carla.Waypoint, RoadOption]]): Ordered list of (waypoint, road option) tuples forming the full route.
     """
     # Extract locations for the specified spawn points
     route_locations = [spawn_points[i].location for i in route_indices]
@@ -479,7 +469,7 @@ def get_actor_display_name(actor: carla.Actor, truncate: int = 250) -> str:
         truncate (int, optional): Maximum allowed length of the name. Defaults to 250.
 
     Returns:
-        str: Formatted actor name, truncated with an ellipsis if it exceeds the limit.
+        display_name (str): Formatted actor name, truncated with an ellipsis if it exceeds the limit.
     """
     type_id = actor.type_id
     type_parts = type_id.split(".")
@@ -505,9 +495,6 @@ def update_vehicle_physics(actor: carla.Vehicle) -> None:
 
     Args:
         actor (carla.Vehicle): Vehicle actor whose physics control will be updated.
-
-    Returns:
-        None
     """
     if not isinstance(actor, carla.Vehicle):
         # Skip if the actor is not a vehicle
@@ -533,7 +520,7 @@ def compute_server_fps(fixed_delta_seconds: float) -> float:
         fixed_delta_seconds (float): Time in seconds between server updates.
 
     Returns:
-        float: Calculated FPS value.
+        fps (float): Calculated FPS value.
     """
     # Avoid division by zero by clamping to a minimal positive value
     return 1.0 / max(1e-9, fixed_delta_seconds)
@@ -548,7 +535,7 @@ def compute_client_fps(current_time: float, previous_time: float) -> float:
         previous_time (float): Previous timestamp in seconds.
 
     Returns:
-        float: Computed FPS value.
+        fps (float): Computed FPS value.
     """
     # Compute time difference and clamp to avoid division by zero
     return 1.0 / max(1e-9, current_time - previous_time)
@@ -565,7 +552,7 @@ def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
         agent (BasicAgent): The agent whose errors are computed.
 
     Returns:
-        Tuple[]: Lateral error and angular error (degrees).
+        errors (Tuple[float, float]): Lateral error and angular error (degrees).
     """
     # Get vehicle transform and location
     vehicle = agent._vehicle
@@ -612,3 +599,19 @@ def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
     angular_error = math.degrees(angle_rad)
 
     return lateral_error, angular_error
+
+
+def clamp_value(value: float, min_value: float, max_value: float) -> float:
+    """
+    Return `value` constrained to the inclusive range [`min_value`, `max_value`].
+
+    Args:
+        value (float): Number to clamp.
+        min_value (float): Lower bound.
+        max_value (float): Upper bound.
+
+    Returns:
+        clamped_value (float):The clamped number.
+    """
+    clamped_value = max(min(value, max_value), min_value)
+    return clamped_value

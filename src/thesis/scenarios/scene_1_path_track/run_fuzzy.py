@@ -45,7 +45,7 @@ def main():
     CLIENT_DELTA_SLEEP = 0.02  # Client-side sleep to improve visualization smoothness, recommended range [0.02–0.04] seconds
     DISPLAY_TELEMETRY = False  # Show telemetry info on vehicle
     DRAW_PLAN_WAYPOINTS = False  # Visualize local route plan
-    CUSTOM_ROUTE_NAVIGATION = False  # Use predefined route if True
+    CUSTOM_ROUTE_NAVIGATION = True  # Use predefined route if True
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors
     EGO_TIMEOUT = 2.5  # Pause duration at simulation start
@@ -66,8 +66,8 @@ def main():
     EGO_LANE_INVASION_SENSOR = None
 
     # Custom spawn point indices for defining a route in Town01_Opt
-    # EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
-    EGO_ROUTE_INDICES = [184, 182, 47, 36]
+    EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
+    # EGO_ROUTE_INDICES = [184, 182, 47, 36]
 
     try:
         # ----------------- Connect to CARLA Server -----------------
@@ -136,7 +136,7 @@ def main():
         # ----------------- Initialize ego agent -----------------
         EGO_AGENT = FuzzyControlAgent(
             vehicle=EGO_VEHICLE,
-            target_speed=30,
+            target_speed=50,
             opt_dict={
                 "max_throttle": 1.0,  # Custom value
                 "max_brake": 1.0,  # Custom value
@@ -145,11 +145,7 @@ def main():
                 "ignore_stop_signs": True,
                 "ignore_vehicles": False,
                 "follow_speed_limits": False,
-                "lateral_control_dict": {
-                    "K_P": 4.0,
-                    "K_I": 0.04,
-                    "K_D": 0.08,
-                },
+                "offset": 0.0,
             },
         )
         LOGGER.debug("Ego [Fuzzy Agent] initialized.")
@@ -183,7 +179,7 @@ def main():
                 break
 
             # Update agent's speed according to OpenDRIVE lane speed limits
-            # EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
+            EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
 
             # Update spectator camera
             spectator_transform = set_spectator_camera(
