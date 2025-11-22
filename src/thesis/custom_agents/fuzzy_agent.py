@@ -16,8 +16,10 @@ PROJECT_ROOT = FILE_PATH.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from models.lateral_control.fuzzy_controller import FuzzyLateralGeometricControl  # noqa: E402
-from utils.helpers import compute_lateral_angular_errors  # noqa: E402
+from client.src._archive.lateral_control_experiments.fuzzy_controller import (
+    FuzzyLateralControl,  # noqa: E402
+)
+from utils.helpers import compute_steering_deviations  # noqa: E402
 
 
 class FuzzyControlAgent(BasicAgent):
@@ -30,10 +32,13 @@ class FuzzyControlAgent(BasicAgent):
     ) -> None:
         if opt_dict is None:
             opt_dict = {}
+
         super().__init__(vehicle, target_speed, opt_dict, debug)
+
         self._vehicle = vehicle
         self._debug = debug
-        self._lateral_controller = FuzzyLateralGeometricControl()
+        self._longitudinal_controller = None
+        self._lateral_controller = FuzzyLateralControl()
         self._control_kwargs = {
             "throttle": 0.0,
             "brake": 0.0,
@@ -43,20 +48,22 @@ class FuzzyControlAgent(BasicAgent):
             "manual_gear_shift": False,
             "gear": 0,
         }
+        self._lateral_error = 0.0
+        self._angular_error = 0.0
 
     def run_step(self, frame_ID: int) -> carla.VehicleControl:
         pid_control = self._local_planner.run_step(self._debug)
         current_speed = get_speed(self._vehicle)
 
         # Calculate lateral offset and heading error for the vehicle
-        lateral_error, angular_error = compute_lateral_angular_errors(self)
+        self._lateral_error, self._angular_error = compute_steering_deviations(self)
 
         # Get road curvature, i.e. whether the vehicle is on a curved road or driving on a straight road
         angle_diff = self._get_road_curvature()
 
         # Compute steering control
         steer_control = self._lateral_controller.compute_steer_control(
-            lateral_error, angular_error, angle_diff, current_speed
+            self._lateral_error, self._angular_error, angle_diff, current_speed
         )
         self._control_kwargs.update(steer_control)
 
@@ -73,7 +80,7 @@ class FuzzyControlAgent(BasicAgent):
 
         agent_control.throttle = pid_control.throttle
         agent_control.brake = pid_control.brake
-        # agent_control.steer = pid_control.steer
+        agent_control.steer = pid_control.steer
 
         return agent_control
 

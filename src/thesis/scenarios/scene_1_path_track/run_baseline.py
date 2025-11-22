@@ -1,5 +1,4 @@
-"""_summary_
-run_baseline.py
+"""run_baseline.py
 
 Execute CARLA Baseline Scenario 1: path tracking using a BasicAgent.
 
@@ -31,8 +30,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     compute_client_fps,
-    compute_lateral_angular_errors,
     compute_server_fps,
+    compute_steering_deviations,
     draw_plan_waypoints,
     generate_custom_route,
     get_actor_display_name,
@@ -173,7 +172,6 @@ def main():
             opt_dict={
                 "max_throttle": 0.75,  # Default value
                 "max_brake": 0.5,  # Default value
-                "max_steering": 0.8,  # Default value
                 "ignore_traffic_lights": True,
                 "ignore_stop_signs": True,
                 "ignore_vehicles": False,
@@ -229,7 +227,7 @@ def main():
                 ego_control = EGO_AGENT.run_step()
 
                 # Calculate lateral offset and heading error for the vehicle
-                lateral_error, angular_error = compute_lateral_angular_errors(EGO_AGENT)
+                lateral_error, angular_error = compute_steering_deviations(EGO_AGENT)
                 if snapshot_frame_ID % 10 == 0:
                     print(
                         f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"

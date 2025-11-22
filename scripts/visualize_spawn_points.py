@@ -1,5 +1,4 @@
-"""_summary_
-visualize_spawn_points.py
+"""visualize_spawn_points.py
 
 Visualize default CARLA spawn point locations.
 

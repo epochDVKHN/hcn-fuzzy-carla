@@ -541,18 +541,18 @@ def compute_client_fps(current_time: float, previous_time: float) -> float:
     return 1.0 / max(1e-9, current_time - previous_time)
 
 
-def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
+def compute_steering_deviations(agent: BasicAgent) -> Tuple[float, float]:
     """
     Compute lateral and angular errors of a BasicAgent instance relative to its target waypoint.
 
-    The lateral error is the signed distance from the vehicle to the target waypoint along the waypoint's right vector.
+    The lateral error is the signed distance (in meters) from the vehicle to the target waypoint along the waypoint's right vector.
     The angular error is the signed angle (in degrees) between the vehicle's heading and the vector pointing from the vehicle to the target waypoint.
 
     Args:
         agent (BasicAgent): The agent whose errors are computed.
 
     Returns:
-        errors (Tuple[float, float]): Lateral error and angular error (degrees).
+        errors (Tuple[float, float]): Lateral error (meters) and angular error (degrees).
     """
     # Get vehicle transform and location
     vehicle = agent._vehicle
@@ -575,9 +575,12 @@ def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
     else:
         waypoint_location = target_waypoint.transform.location
 
-    # Vehicle forward vector (x, y plane)
+    # Vehicle normalized forward vector (x, y plane)
     vehicle_vector_3D = vehicle_transform.get_forward_vector()
     vehicle_vector = np.array([vehicle_vector_3D.x, vehicle_vector_3D.y, 0.0])
+    vehicle_norm = np.linalg.norm(vehicle_vector)
+    if vehicle_norm:
+        vehicle_vector /= vehicle_norm
 
     # Vector from vehicle to waypoint (x, y plane)
     waypoint_vector_3D = waypoint_location - vehicle_location
@@ -593,6 +596,7 @@ def compute_lateral_angular_errors(agent: BasicAgent) -> Tuple[float, float]:
     else:
         dot = np.dot(vehicle_vector, waypoint_vector)
         angle_rad = math.acos(np.clip(dot / norm_product, -1.0, 1.0))
+
     # Flip sign of angular error if waypoint is to the right
     if lateral_error < 0.0:
         angle_rad *= -1.0

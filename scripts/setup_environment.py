@@ -1,5 +1,4 @@
-"""_summary_
-setup_environment.py
+"""setup_environment.py
 
 Initializes the CARLA simulation environment.
 

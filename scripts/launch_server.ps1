@@ -19,7 +19,7 @@ Start-Process $ExePath -ArgumentList "-windowed", "-ResX=820", "-ResY=600", "-qu
 # Command-line argument options:
 # - "-windowed"        : Run in windowed mode (replace with "-fullscreen" for fullscreen)
 # - "-ResX" and "-ResY": Set resolution (e.g., 820x600)
-# - "-quality-level"   : Set graphics quality ("Low", "High", "Epic")
+# - "-quality-level"   : Set graphics quality ("Low", "Epic")
 # - "-dx12"            : Use DirectX 12 (replace with "-opengl" or "-vulkan" if desired)
 # - "-RenderOffScreen" : Enable off-screen rendering (headless mode)
 # - "-prefernvidia"    : Prefer NVIDIA GPU over integrated graphics

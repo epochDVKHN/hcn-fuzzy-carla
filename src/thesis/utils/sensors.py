@@ -1,5 +1,4 @@
-"""_summary_
-sensors.py
+"""sensors.py
 
 Sensor wrapper classes for CARLA simulation.
 
