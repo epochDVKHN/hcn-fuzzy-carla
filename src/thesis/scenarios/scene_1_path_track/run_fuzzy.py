@@ -21,6 +21,7 @@ from utils.helpers import (  # noqa: E402
     generate_custom_route,
     get_actor_display_name,
     get_route_length,
+    halt_vehicle,
     set_spectator_camera,
     set_vehicle_lights,
     update_vehicle_physics,
@@ -140,11 +141,18 @@ def main():
             opt_dict={
                 "max_throttle": 1.0,  # Custom value
                 "max_brake": 1.0,  # Custom value
+                "max_steering": 0.8,
                 "ignore_traffic_lights": True,
                 "ignore_stop_signs": True,
                 "ignore_vehicles": False,
                 "follow_speed_limits": False,
                 "offset": 0.0,
+                "lateral_control_dict": {
+                    "K_P": 1.95,
+                    "K_I": 0.05,
+                    "K_D": 0.2,
+                    "dt": SERVER_DELTA_SECONDS,
+                },
             },
         )
         LOGGER.debug("Ego [Fuzzy Agent] initialized.")
@@ -166,43 +174,62 @@ def main():
 
         # ----------------- Main simulation loop -----------------
         EGO_START_TIME = time.time()
-        last_time = time.time()
+        last_time = EGO_START_TIME
+        end_of_route = False
+        finish_start_time = None
+
+        # Store previous steering to maintain lane during stop
+        last_steer = EGO_VEHICLE.get_control().steer
+
         while True:
+            # Advance the simulation and get the latest world snapshot
             world_snapshot = world_snapshot_tick(world)
             snapshot_frame_ID = world_snapshot.frame
 
-            # Terminate loop when ego reaches destination
-            if EGO_AGENT.done():
-                LOGGER.info("Ego [Fuzzy Agent] reached destination.")
+            # Check if ego vehicle reached its destination
+            if not end_of_route and EGO_AGENT.done():
+                LOGGER.info("Ego [Basic Agent] reached destination.")
+                end_of_route = True
+                finish_start_time = time.time()
+
+            # Stop simulation after timeout post reaching destination
+            if end_of_route and time.time() - finish_start_time >= EGO_TIMEOUT:
                 time.sleep(CLIENT_DELTA_SLEEP)
                 break
 
-            # Update agent's speed according to OpenDRIVE lane speed limits
-            EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
-
-            # Update spectator camera
+            # Update spectator camera to follow ego vehicle
             spectator_transform = set_spectator_camera(
                 EGO_VEHICLE,
                 SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
             )
             spectator.set_transform(spectator_transform)
 
-            # Draw planned route
-            if DRAW_PLAN_WAYPOINTS:
-                draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
-
-            # Compute vehicle control: pause at start for EGO_TIMEOUT seconds
-            if time.time() - EGO_START_TIME >= EGO_TIMEOUT:
-                ego_control = EGO_AGENT.run_step(snapshot_frame_ID)
+            # Determine ego control based on route status
+            if end_of_route or time.time() - EGO_START_TIME < EGO_TIMEOUT:
+                # Apply brake and maintain last steering
+                ego_control = halt_vehicle(last_steer)
             else:
-                # Pause ego vehicle motion
-                ego_control = carla.VehicleControl(
-                    throttle=0.0,
-                    brake=1.0,
-                    steer=0.0,
-                )
+                # Set agent's target speed according to OpenDRIVE lane speed limits
+                EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
 
-            # Update vehicle lights
+                # Optionally visualize planned route
+                if DRAW_PLAN_WAYPOINTS:
+                    draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
+
+                # Compute control commands for this step
+                ego_control = EGO_AGENT.run_step(snapshot_frame_ID)
+
+                # Compute lateral and heading deviations for monitoring
+                # lateral_error, angular_error = compute_steering_deviations(EGO_AGENT)
+                # if snapshot_frame_ID % 10 == 0:
+                #     print(
+                #         f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"
+                #     )
+
+                # Update last applied steering
+                last_steer = ego_control.steer
+
+            # Update vehicle light states based on vehicle control and step history
             ego_new_light_mask = set_vehicle_lights(
                 EGO_DEFAULT_LIGHT_MASK,
                 ego_control,
@@ -211,13 +238,13 @@ def main():
             )
             EGO_VEHICLE.set_light_state(ego_new_light_mask)
 
-            # Apply vehicle control
+            # Apply computed control to ego vehicle
             EGO_VEHICLE.apply_control(ego_control)
 
-            # Sleep to improve visualization smoothness
+            # Sleep to regulate visualization update rate
             time.sleep(CLIENT_DELTA_SLEEP)
 
-            # Update client FPS logging
+            # Compute client FPS for diagnostics
             current_time = time.time()
             client_fps = compute_client_fps(current_time, last_time)
             last_time = current_time

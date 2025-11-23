@@ -559,18 +559,18 @@ def compute_steering_deviations(agent: BasicAgent) -> Tuple[float, float]:
     vehicle_transform = vehicle.get_transform()
     vehicle_location = vehicle_transform.location
 
-    # Get target waypoint and path offset from local planner
+    # Get target waypoint and trajectory offset from local planner
     local_planner = agent.get_local_planner()
     target_waypoint = local_planner.target_waypoint
-    path_offset = local_planner._offset
+    trajectory_offset = local_planner._offset
 
     # Compute target waypoint location, applying lateral offset if present
-    if path_offset != 0.0:
+    if trajectory_offset != 0.0:
         waypoint_transform = target_waypoint.transform
         waypoint_right_vector = waypoint_transform.get_right_vector()
         waypoint_location = waypoint_transform.location + carla.Location(
-            x=path_offset * waypoint_right_vector.x,
-            y=path_offset * waypoint_right_vector.y,
+            x=trajectory_offset * waypoint_right_vector.x,
+            y=trajectory_offset * waypoint_right_vector.y,
         )
     else:
         waypoint_location = target_waypoint.transform.location
@@ -589,7 +589,7 @@ def compute_steering_deviations(agent: BasicAgent) -> Tuple[float, float]:
     # Lateral error: cross product z-component gives signed distance
     lateral_error = np.cross(vehicle_vector, waypoint_vector)[2]
 
-    # Angular error: signed angle between vehicle heading and waypoint vector
+    # Angular error: dot product gives signed angle between vehicle heading and waypoint vector
     norm_product = np.linalg.norm(waypoint_vector) * np.linalg.norm(vehicle_vector)
     if norm_product == 0.0:
         angle_rad = 0.0
@@ -619,3 +619,26 @@ def clamp_value(value: float, min_value: float, max_value: float) -> float:
     """
     clamped_value = max(min(value, max_value), min_value)
     return clamped_value
+
+
+def halt_vehicle(retain_steer: float = 0.0) -> carla.VehicleControl:
+    """
+    Generate a VehicleControl to stop and hold the vehicle at its current position.
+
+    Args:
+        retain_steer (float): Steering angle to maintain while stopped. Default is 0.0.
+
+    Returns:
+        vehicle_control (carla.VehicleControl): Control command that stops the vehicle with the specified steering angle.
+    """
+    vehicle_control = carla.VehicleControl(
+        throttle=0.0,
+        brake=0.5,
+        steer=retain_steer,
+        hand_brake=False,
+        reverse=False,
+        manual_gear_shift=False,
+        gear=0,
+    )
+
+    return vehicle_control

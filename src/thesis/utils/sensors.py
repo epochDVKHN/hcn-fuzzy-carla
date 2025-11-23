@@ -14,6 +14,9 @@ from typing import List, Tuple
 
 import carla
 
+# Retrieve the module-level logger
+LOGGER = logging.getLogger(__name__)
+
 # Add project root path for module imports
 FILE_PATH = Path(__file__).resolve()
 PROJECT_ROOT = FILE_PATH.parents[1]
@@ -36,9 +39,6 @@ class CollisionSensor:
 
         Args:
             parent_actor (carla.Actor): The actor to which this sensor is attached.
-
-        Returns:
-            None
         """
         self.sensor = None
         self._parent = parent_actor
@@ -75,7 +75,7 @@ class CollisionSensor:
         Each entry contains:`(frame, timestamp, impulse_x, impulse_y, impulse_z, other_actor_id, other_actor_type_id)`.
 
         Returns:
-            List[Tuple[]]: A shallow copy of the collision events history.
+            collision_history (List[Tuple[int, float, float, float, float, int, str]]): A shallow copy of the collision events history.
         """
         return self.history.copy()  # Return a shallow copy to prevent external mutation
 
@@ -91,9 +91,6 @@ class CollisionSensor:
         Args:
             weak_self (weakref.ReferenceType): Weak reference to the `CollisionSensor` instance.
             event (carla.CollisionEvent): Collision event data from CARLA.
-
-        Returns:
-            None
         """
         self = weak_self()
         if not self:
@@ -143,9 +140,6 @@ class GNSSSensor:
 
         Args:
             parent_actor (carla.Actor): Actor to attach the GNSS sensor to.
-
-        Returns:
-            None
         """
         self.sensor = None
         self._parent = parent_actor
@@ -223,9 +217,6 @@ class GNSSSensor:
         Args:
             weak_self (weakref.ReferenceType): Weak reference to the `GNSSSensor` instance.
             step (carla.GnssMeasurement): GNSS measurement data containing frame, timestamp, and geolocation coordinates.
-
-        Returns:
-            None
         """
         self = weak_self()
         if not self:
@@ -252,9 +243,6 @@ class IMUSensor:
 
         Args:
             parent_actor (carla.Actor): The actor to which the IMU sensor is attached.
-
-        Returns:
-            None
         """
         self.sensor = None
         self._parent = parent_actor
@@ -350,9 +338,6 @@ class IMUSensor:
         Args:
             weak_self (weakref.ReferenceType): Weak reference to the `IMUSensor` instance.
             step (carla.IMUMeasurement): Current IMU measurement containing frame, timestamp, and raw sensor readings.
-
-        Returns:
-            None
         """
         self = weak_self()
         if not self:
@@ -414,9 +399,6 @@ class LaneInvasionSensor:
 
         Args:
             parent_actor (carla.Actor): The vehicle actor to attach the lane invasion sensor to.
-
-        Returns:
-            None
         """
         self.sensor = None
 
@@ -456,7 +438,7 @@ class LaneInvasionSensor:
         Each entry in the history is a tuple: `(frame, timestamp, lane_type, lane_color, lane_change, width)`.
 
         Returns:
-            List[Tuple[]]: Shallow copy of the recorded lane invasion events.
+            invasion_history(List[Tuple[int, float, str, str, str, float]]): Shallow copy of the recorded lane invasion events.
         """
         return self.history.copy()  # Return a shallow copy to prevent external mutation
 
@@ -472,9 +454,6 @@ class LaneInvasionSensor:
         Args:
             weak_self (weakref.ReferenceType): Weak reference to the `LaneInvasionSensor` instance.
             event (carla.LaneInvasionEvent): Lane invasion event containing frame, timestamp, and crossed lane marking data.
-
-        Returns:
-            None
         """
         self = weak_self()
         if not self:

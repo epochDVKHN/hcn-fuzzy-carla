@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 
 import carla
 from agents.navigation.basic_agent import BasicAgent
-from agents.tools.misc import get_speed
 
 # Retrieve the module-level logger
 LOGGER = logging.getLogger(__name__)
@@ -16,9 +15,7 @@ PROJECT_ROOT = FILE_PATH.parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
-from client.src._archive.lateral_control_experiments.fuzzy_controller import (
-    FuzzyLateralControl,  # noqa: E402
-)
+from models.lateral_control.pid_controller import PIDLateralControl  # noqa: E402
 from utils.helpers import compute_steering_deviations  # noqa: E402
 
 
@@ -37,8 +34,24 @@ class FuzzyControlAgent(BasicAgent):
 
         self._vehicle = vehicle
         self._debug = debug
+
+        # Initialise longitudinal controller
         self._longitudinal_controller = None
-        self._lateral_controller = FuzzyLateralControl()
+
+        # Initialise lateral controller
+        _lateral_kwargs = opt_dict.get("lateral_control_dict", {})
+        if "dt" not in _lateral_kwargs and "dt" in opt_dict:
+            _lateral_kwargs["dt"] = opt_dict["dt"]
+
+        self._lateral_controller = PIDLateralControl(
+            vehicle=self._vehicle,
+            offset=opt_dict.get("offset", 0.0),
+            max_steer=opt_dict.get("max_steering", 0.8),
+            rate_limit=opt_dict.get("rate_limit_steering", 0.1),
+            **_lateral_kwargs,
+        )
+
+        # Initialise vehicle control
         self._control_kwargs = {
             "throttle": 0.0,
             "brake": 0.0,
@@ -48,41 +61,43 @@ class FuzzyControlAgent(BasicAgent):
             "manual_gear_shift": False,
             "gear": 0,
         }
+
         self._lateral_error = 0.0
         self._angular_error = 0.0
 
     def run_step(self, frame_ID: int) -> carla.VehicleControl:
         pid_control = self._local_planner.run_step(self._debug)
-        current_speed = get_speed(self._vehicle)
-
-        # Calculate lateral offset and heading error for the vehicle
-        self._lateral_error, self._angular_error = compute_steering_deviations(self)
 
         # Get road curvature, i.e. whether the vehicle is on a curved road or driving on a straight road
         angle_diff = self._get_road_curvature()
 
         # Compute steering control
         steer_control = self._lateral_controller.compute_steer_control(
-            self._lateral_error, self._angular_error, angle_diff, current_speed
+            self._local_planner.target_waypoint
         )
         self._control_kwargs.update(steer_control)
 
-        if frame_ID % 5 == 0:
-            # print(
-            #     f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {self._control_kwargs['steer']:.2f} | (Kv): {self._lateral_controller._speed_sensitivity_factor} | Angle diff: {angle_diff}"
-            # )
-            print(
-                f"Angle diff: {angle_diff} | Steer: {self._control_kwargs['steer']:.2f} | (Kv): {self._lateral_controller._speed_sensitivity_factor}"
-            )
-            # pass
+        # Compute steering deviations of the vehicle
+        self._lateral_error, self._angular_error = compute_steering_deviations(self)
 
+        if frame_ID % 5 == 0:
+            print(
+                f"Lateral error: {self._lateral_error:.2f} | Angular error: {self._angular_error:.2f} | Angle diff: {angle_diff} | Steer: {self._control_kwargs['steer']:.2f}"
+            )
+
+        # Update vehicle control
         agent_control = carla.VehicleControl(**self._control_kwargs)
 
         agent_control.throttle = pid_control.throttle
         agent_control.brake = pid_control.brake
-        agent_control.steer = pid_control.steer
+        # agent_control.steer = pid_control.steer
 
         return agent_control
+
+    def update_path_offset(self, new_offset: float) -> None:
+        self._lateral_controller.set_offset(new_offset)
+        self._local_planner.set_offset(new_offset)
+        self._local_planner._offset = new_offset
 
     def _get_road_curvature(self, lookahead_steps: int = 3) -> float:
         # Get the future waypoints
