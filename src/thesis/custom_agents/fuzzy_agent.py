@@ -77,6 +77,9 @@ class FuzzyControlAgent(BasicAgent):
         current_angle_diff = self._get_road_curvature(lookahead_steps=25)
         self._road_curvature_history.append(current_angle_diff)
 
+        # Set agent's target speed according to OpenDRIVE lane speed limits
+        self.set_target_speed(self._vehicle.get_speed_limit())
+
         # Adjust the local planner's "hit box" size based on speed and offset
         self._update_planner_lateral_lookahead(current_speed_kmh, abs(current_offset))
         # Update the local planner's waypoint navigation queue

@@ -211,9 +211,6 @@ def main():
                 # Apply brake and maintain last steering
                 ego_control = halt_vehicle(last_steer)
             else:
-                # Set agent's target speed according to OpenDRIVE lane speed limits
-                EGO_AGENT.set_target_speed(EGO_VEHICLE.get_speed_limit())
-
                 # Optionally visualize planned route
                 if DRAW_PLAN_WAYPOINTS:
                     draw_plan_waypoints(world, EGO_AGENT, snapshot_frame_ID)
