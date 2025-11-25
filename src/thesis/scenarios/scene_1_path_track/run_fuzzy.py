@@ -153,6 +153,8 @@ def main():
                     "K_D": 0.2,
                     "dt": SERVER_DELTA_SECONDS,
                 },
+                "base_min_distance": 1.2,
+                "distance_ratio": 0.2,
             },
         )
         LOGGER.debug("Ego [Fuzzy Agent] initialized.")
@@ -294,5 +296,5 @@ if __name__ == "__main__":
     )
     LOGGER = logging.getLogger(__name__)
 
-    # Run CARLA baseline path-tracking scenario
+    # Run CARLA fuzzy path-tracking scenario
     main()

@@ -103,9 +103,9 @@ class CollisionSensor:
             collision_impulse.x**2 + collision_impulse.y**2 + collision_impulse.z**2
         )
 
-        # self._logger.warning(
-        #     f"Collided with {actor_type} (Impact Intensity: {collision_intensity:.2f} N·s)."
-        # )
+        self._logger.warning(
+            f"Collided with {actor_type} (Impact Intensity: {collision_intensity:.2f} N·s)."
+        )
 
         # Store the event sensor data attributes
         self.history.append(
@@ -468,7 +468,7 @@ class LaneInvasionSensor:
 
             lane_descriptions.append(f"'{lane_color} {lane_type}'")
 
-        # self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
+        self._logger.info(f"Crossed lines {' and '.join(lane_descriptions)}.")
 
         # Store the event sensor data attributes
         for marking in event.crossed_lane_markings:

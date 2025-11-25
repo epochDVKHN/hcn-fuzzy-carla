@@ -58,9 +58,6 @@ class PIDLateralControl:
         self._offset = offset
         self._MAX_STEER = max_steer
         self._RATE_LIMIT = rate_limit
-        print(
-            f"K_P: {self._k_p}, K_I: {self._k_i}, K_D: {self._k_d}, dt: {self._delta_time}"
-        )
 
         # Error buffer for integral and derivative terms
         self._error_buffer = deque(maxlen=10)

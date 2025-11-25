@@ -1,10 +1,12 @@
 import logging
 import sys
+from collections import deque
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 import carla
 from agents.navigation.basic_agent import BasicAgent
+from agents.tools.misc import get_speed
 
 # Retrieve the module-level logger
 LOGGER = logging.getLogger(__name__)
@@ -20,6 +22,10 @@ from utils.helpers import compute_steering_deviations  # noqa: E402
 
 
 class FuzzyControlAgent(BasicAgent):
+    # Local planner look-ahead parameters sets (base_min_distance, distance_ratio) for lateral motion
+    _STABILITY_MODE = (3.0, 0.5)  # For stable high-speed driving and lane changes
+    _PRECISION_MODE = (1.2, 0.2)  # For precise low-speed driving especially on curves
+
     def __init__(
         self,
         vehicle: carla.Vehicle,
@@ -62,14 +68,22 @@ class FuzzyControlAgent(BasicAgent):
             "gear": 0,
         }
 
-        self._lateral_error = 0.0
-        self._angular_error = 0.0
+        self._road_curvature_history = deque(maxlen=35)
 
     def run_step(self, frame_ID: int) -> carla.VehicleControl:
+        # Gather vehicle state data
+        current_speed_kmh = get_speed(self._vehicle)
+        current_offset = self._lateral_controller._offset
+        current_angle_diff = self._get_road_curvature(lookahead_steps=25)
+        self._road_curvature_history.append(current_angle_diff)
+
+        # Adjust the local planner's "hit box" size based on speed and offset
+        self._update_planner_lateral_lookahead(current_speed_kmh, abs(current_offset))
+        # Update the local planner's waypoint navigation queue
         pid_control = self._local_planner.run_step(self._debug)
 
-        # Get road curvature, i.e. whether the vehicle is on a curved road or driving on a straight road
-        angle_diff = self._get_road_curvature()
+        # Compute steering deviations of the vehicle
+        lateral_error, angular_error = compute_steering_deviations(self)
 
         # Compute steering control
         steer_control = self._lateral_controller.compute_steer_control(
@@ -77,62 +91,111 @@ class FuzzyControlAgent(BasicAgent):
         )
         self._control_kwargs.update(steer_control)
 
-        # Compute steering deviations of the vehicle
-        self._lateral_error, self._angular_error = compute_steering_deviations(self)
-
-        if frame_ID % 5 == 0:
-            print(
-                f"Lateral error: {self._lateral_error:.2f} | Angular error: {self._angular_error:.2f} | Angle diff: {angle_diff} | Steer: {self._control_kwargs['steer']:.2f}"
-            )
+        # if frame_ID % 5 == 0:
+        #     print(
+        #         f"Angle diff: {current_angle_diff} | Steer: {self._control_kwargs['steer']:.2f}"
+        #     )
 
         # Update vehicle control
         agent_control = carla.VehicleControl(**self._control_kwargs)
 
         agent_control.throttle = pid_control.throttle
         agent_control.brake = pid_control.brake
-        # agent_control.steer = pid_control.steer
 
         return agent_control
 
     def update_path_offset(self, new_offset: float) -> None:
+        """
+        Set the vehicle's lateral path offset.
+
+        Args:
+            new_offset (float): Lateral deviation from the road centerline (meters).
+        """
         self._lateral_controller.set_offset(new_offset)
         self._local_planner.set_offset(new_offset)
         self._local_planner._offset = new_offset
 
-    def _get_road_curvature(self, lookahead_steps: int = 3) -> float:
-        # Get the future waypoints
+    def _check_road_curvature(self) -> bool:
+        """
+        Determine whether the vehicle is in, approaching, or has just exited a curved road.
+
+        Returns:
+            in_curve_state (bool): True if any recent road curvature value indicates a non-straight segment.
+        """
+        in_curve_state = any(abs(angle) > 0 for angle in self._road_curvature_history)
+
+        return in_curve_state
+
+    def _get_road_curvature(self, lookahead_steps: int = 5) -> int:
+        """
+        Compute the signed angle difference (curvature) between the current waypoint and a future waypoint ahead.
+
+        The corresponding signed angle represents the curvature of the road:
+        - A positive value indicates a turn to the right.
+        - A negative value indicates a turn to the left.
+        - A value of zero indicates a straight road.
+
+        Args:
+            lookahead_steps (int): Number of waypoints ahead to consider.
+
+        Returns:
+            angle_diff (int): Signed angle difference in degrees, in the range [-180, 180], rounded to the nearest degree.
+        """
+        # Retrieve the future waypoint at the specified lookahead distance
         future_node = self._local_planner.get_incoming_waypoint_and_direction(
             steps=lookahead_steps
         )
-        # Assume straight if no road ahead
+
+        # If no future waypoint exists, assume straight road
         if future_node is None or future_node[0] is None:
             return 0.0
-        else:
-            future_waypoint = future_node[0]
-            # future_road_option = future_node[1]
+        future_waypoint = future_node[0]
+        # future_road_option = future_node[1]
 
         # Get current waypoint from the local planner
         current_waypoint = self._local_planner.target_waypoint
         # current_road_option = self._local_planner.target_road_option
 
-        # Get waypoint yaws
-        current_yaw = round(current_waypoint.transform.rotation.yaw, 0)
-        future_yaw = round(future_waypoint.transform.rotation.yaw, 0)
+        # Extract yaw angles in degrees
+        current_yaw = current_waypoint.transform.rotation.yaw
+        future_yaw = future_waypoint.transform.rotation.yaw
 
-        # Calculate signed angle difference ("shortest angle")
+        # Compute signed shortest rotation between current and future yaw
         angle_diff = (future_yaw - current_yaw + 180) % 360 - 180
 
-        # if angle_diff > 0:
-        #     print(
-        #         f"Right turn: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
-        #     )
-        # elif angle_diff < 0:
-        #     print(
-        #         f"Left turn: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
-        #     )
-        # else:
-        #     print(
-        #         f"Straight: {angle_diff}, Current yaw: {current_yaw}, Future yaw: {future_yaw}"
-        #     )
+        return round(angle_diff)
 
-        return angle_diff
+    def _update_planner_lateral_lookahead(
+        self, current_speed_kmh: float, current_offset_abs: float
+    ) -> None:
+        """
+        Selects lateral look-ahead parameters based on vehicle speed, lateral offset, and upcoming curvature.
+
+        The method operates in two distinct modes:
+
+        - *Precision Mode*:
+        This mode applies a short look-ahead horizon to force the planner to follow the immediate tangent of the path.
+        It is intended to maintain geometric accuracy in curves and at low speeds, reducing chordal errors that can otherwise lead to corner-cutting or curb encroachment.
+
+        - *Stability Mode*:
+        This mode applies a longer look-ahead horizon to dampen steering aggressiveness.
+        It is used only on straight segments and under high-speed or large-offset conditions, which helps prevent steering oscillations and improves lateral stability during fast cruising or significant lateral corrections.
+
+        Args:
+            current_speed_kmh (float): Current vehicle speed in km/h.
+            current_offset_abs (float): Absolute lateral deviation from the reference path in meters.
+        """
+        CURVE_CHECK = self._check_road_curvature()
+        STABILITY_CHECK = current_speed_kmh > 40.0 or current_offset_abs > 0.5
+
+        #  Switch to stability mode only on straight segments and only when conditions justify it
+        if STABILITY_CHECK and not CURVE_CHECK:
+            lateral_lookahead_params = self._STABILITY_MODE
+        else:
+            # Otherwise, default to precision mode for safer geometric tracking
+            lateral_lookahead_params = self._PRECISION_MODE
+
+        # Apply selected lookahead parameters to the local planner
+        base_min_distance, distance_ratio = lateral_lookahead_params
+        self._local_planner._base_min_distance = base_min_distance
+        self._local_planner._distance_ratio = distance_ratio
