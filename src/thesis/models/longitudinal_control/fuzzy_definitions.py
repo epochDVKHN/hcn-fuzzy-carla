@@ -12,7 +12,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 
-class FLC_Cruise:
+class FLC_FreeFlow:
+    def __init__(self) -> None:
+        pass
+
+
+class FLC_Bend:
     def __init__(self) -> None:
         pass
 
@@ -25,3 +30,7 @@ class FLC_Follow:
 class FLC_Emergency:
     def __init__(self) -> None:
         pass
+
+
+if __name__ == "__main__":
+    pass
