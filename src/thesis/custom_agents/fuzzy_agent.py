@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 from models.lateral_control.pid_controller import PIDLateralControl  # noqa: E402
+from models.longitudinal_control.fuzzy_definitions import FLC_FreeFlow  # noqa: E402
 from utils.helpers import compute_steering_deviations  # noqa: E402
 
 
@@ -42,7 +43,7 @@ class FuzzyControlAgent(BasicAgent):
         self._debug = debug
 
         # Initialise longitudinal controller
-        self._longitudinal_controller = None
+        self._longitudinal_controller = FLC_FreeFlow()
 
         # Initialise lateral controller
         _lateral_kwargs = opt_dict.get("lateral_control_dict", {})
@@ -99,11 +100,29 @@ class FuzzyControlAgent(BasicAgent):
         #         f"Angle diff: {current_angle_diff} | Steer: {self._control_kwargs['steer']:.2f}"
         #     )
 
+        # Compute throttle and brake control
+        speed_error = self._target_speed - current_speed_kmh
+        accel_vec = self._vehicle.get_acceleration()
+        fwd_vec = self._vehicle.get_transform().get_forward_vector()
+        longitudinal_accel = accel_vec.dot(fwd_vec)
+
+        throttle_brake_control, control_contribution = (
+            self._longitudinal_controller.compute_control_command(
+                speed_error, longitudinal_accel
+            )
+        )
+        self._control_kwargs.update(throttle_brake_control)
+
+        if frame_ID % 5 == 0:
+            print(
+                f"Vehicle speed: {current_speed_kmh:.2f} / {self._target_speed:.2f} | Speed error: {speed_error:.2f} | Accel: {longitudinal_accel:.2f} | Throttle: {self._control_kwargs['throttle']:.2f} | Brake: {self._control_kwargs['brake']:.2f} | Steer: {self._control_kwargs['steer']:.2f} | {control_contribution}"
+            )
+
         # Update vehicle control
         agent_control = carla.VehicleControl(**self._control_kwargs)
 
-        agent_control.throttle = pid_control.throttle
-        agent_control.brake = pid_control.brake
+        # agent_control.throttle = pid_control.throttle
+        # agent_control.brake = pid_control.brake
 
         return agent_control
 
@@ -189,10 +208,11 @@ class FuzzyControlAgent(BasicAgent):
             current_offset_abs (float): Absolute lateral deviation from the reference path in meters.
         """
         CURVE_CHECK = self._check_road_curvature()
-        STABILITY_CHECK = current_speed_kmh > 40.0 or current_offset_abs > 0.5
+        # STABILITY_CHECK = current_speed_kmh > 40.0 or current_offset_abs > 0.5
 
         #  Switch to stability mode only on straight segments and only when conditions justify it
-        if STABILITY_CHECK and not CURVE_CHECK:
+        # if STABILITY_CHECK and not CURVE_CHECK:
+        if not CURVE_CHECK:
             lateral_lookahead_params = self._STABILITY_MODE
         else:
             # Otherwise, default to precision mode for safer geometric tracking
@@ -202,3 +222,6 @@ class FuzzyControlAgent(BasicAgent):
         base_min_distance, distance_ratio = lateral_lookahead_params
         self._local_planner._base_min_distance = base_min_distance
         self._local_planner._distance_ratio = distance_ratio
+
+    def _get_vehicle_acceleration(self) -> float:
+        pass
