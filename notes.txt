@@ -10,11 +10,18 @@ Procedures:
 4) Create Folder Structure to differentiate between Server and Client
 5) Download CARLA package installation as per instructions and unzip the folders (use WinRAR or any other program rather the default Windows service as these programs are faster).
 6) Run script start_server.ps1 to ensure the server loads perfectly.
+	If powershell script execution policy has not been disabled then do the following:
+		Open powershell as Administrator and type the following:
+			Set-ExecutionPolicy RemoteSigned (alternatively, Set-ExecutionPolicy -Scope CurrentUser RemoteSigned)
 7) Open Anaconda Prompt
 	Navigate to client folder
 		Create new conda prefix env with python=3.10.16
 		Install required libraries
-		Make sure interpreter is set to conda python environment
+		Make sure interpreter (in VS Code) is set to conda python environment (F1 key -> Python: Select Interpreter) and provide the absolute path to the environment folder
+	Initialize shells (close all previous shell and VS Code instances)
+		Open new Anaconda Prompt Terminal and type the following:
+			conda init powershell
+			conda init cmd.exe
 8) Check out the examples script in server\WindowsNoEditor\PythonAPI\examples
 	Make sure the server is running first
 	Run each python script in a new terminal instance
@@ -26,24 +33,24 @@ Procedures:
 	The scripts in this folders will be automatically run by conda upon activation and deactivation of the project environment.
 11) Set the CARLA_ROOT and corresponding PYTHONPATH which will be loaded every time the environment is activated from the terminal in VS Code.
 	Under activate.d:
-		1) Create the following .bat file:
+		1) Create the following carla_env_activate.bat file: (Paste the absolute installation path of the CARLA server folder here within the double quotes.)
 			@echo off
-			set "CARLA_ROOT=C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"	(Paste the absolute installation path of the CARLA server folder here within the double quotes.)
+			set "CARLA_ROOT=C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"
 			set "PYTHONPATH=%PYTHONPATH%;%CARLA_ROOT%\PythonAPI\carla"
-		2) Create the following .ps1 file:
-			$env:CARLA_ROOT = "C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"	(Paste the installation path of the CARLA server folder here within the double quotes.)
+		2) Create the following carla_env_activate.ps1 file: (Paste the installation path of the CARLA server folder here within the double quotes.)
+			$env:CARLA_ROOT = "C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"
 			$env:PYTHONPATH = "$env:PYTHONPATH;$env:CARLA_ROOT\PythonAPI\carla"
-		3) Create the following .sh file:
+		3) Create the following carla_env_activate.sh file: (Paste the absolute installation path of the CARLA server folder here within the double quotes.)
 			#!/bin/bash
-			export CARLA_ROOT="C:/Users/Eng05/Desktop/CARLA_0.9.15/server/WindowsNoEditor"	(Paste the absolute installation path of the CARLA server folder here within the double quotes.)
+			export CARLA_ROOT="C:/Users/Eng05/Desktop/CARLA_0.9.15/server/WindowsNoEditor"
 			export PYTHONPATH="$PYTHONPATH:$CARLA_ROOT/PythonAPI/carla"
 	Under deactivate.d:
-		1) Create the following .bat file:
+		1) Create the following carla_env_deactivate.bat file:
 			@echo off
 			set "PYTHONPATH=%PYTHONPATH:%CARLA_ROOT%\PythonAPI\carla;=%"
-		2) Create the following .ps1 file:
+		2) Create the following carla_env_deactivate.ps1 file:
 			$env:PYTHONPATH = ($env:PYTHONPATH -split ';' | Where-Object { $_ -ne "$env:CARLA_ROOT\PythonAPI\carla" }) -join ';'
-		3) Create the following .sh file:
+		3) Create the following carla_env_deactivate.sh file:
 			#!/bin/bash
 			PYTHONPATH=$(echo "$PYTHONPATH" | tr ':' '\n' | grep -v "^$CARLA_ROOT/PythonAPI/carla$" | paste -sd ':' -)
 			export PYTHONPATH

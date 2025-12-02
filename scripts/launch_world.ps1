@@ -8,7 +8,8 @@
 
 # Set the paths to the script location, setup script, and Conda environment
 $ScriptPath = $PSScriptRoot
-$EnvPath = "C:\Users\Eng05\Desktop\CARLA_0.9.15\client\env"
+# $EnvPath = "C:\Users\Eng05\Desktop\CARLA_0.9.15\client\env"
+$EnvPath = "C:\Users\User\Desktop\CARLA_Amur\client\env"
 $PythonSetupScript = Join-Path $ScriptPath "setup_environment.py"
 
 # Change the current working directory to the script folder

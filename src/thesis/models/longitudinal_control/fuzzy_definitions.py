@@ -117,7 +117,6 @@ class FLC_FreeFlow:
         # If already accelerating, damp the response to prevent overshoot
         self._rule3 = ctrl.Rule(
             antecedent=(self.speed_error["Positive"] & self.acceleration["Accelerate"]),
-            # TODO: change to Light_Accelerate
             consequent=(self.control_intent["Light_Accelerate"] % 1.0),
             label="rule_3",
             and_func=np.fmin,
@@ -155,7 +154,7 @@ class FLC_FreeFlow:
         self._rule7 = ctrl.Rule(
             antecedent=(self.speed_error["Negative"] & self.acceleration["Decelerate"]),
             # TODO: change to Strong_Brake
-            consequent=(self.control_intent["Strong_Brake"] % 1.0),
+            consequent=(self.control_intent["Light_Brake"] % 1.0),
             label="rule_7",
             and_func=np.fmin,
             or_func=np.fmax,

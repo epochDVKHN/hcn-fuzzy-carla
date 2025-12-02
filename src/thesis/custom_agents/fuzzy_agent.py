@@ -208,7 +208,7 @@ class FuzzyControlAgent(BasicAgent):
             current_offset_abs (float): Absolute lateral deviation from the reference path in meters.
         """
         CURVE_CHECK = self._check_road_curvature()
-        # STABILITY_CHECK = current_speed_kmh > 40.0 or current_offset_abs > 0.5
+        STABILITY_CHECK = current_speed_kmh > 40.0 or current_offset_abs > 0.5
 
         #  Switch to stability mode only on straight segments and only when conditions justify it
         # if STABILITY_CHECK and not CURVE_CHECK:
