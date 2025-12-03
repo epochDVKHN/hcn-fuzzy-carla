@@ -7,8 +7,8 @@
 #>
 
 # Set the paths to the CARLA server folder and executable
-# $ServerPath = "C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"
-$ServerPath = "C:\Users\User\Desktop\CARLA_Amur\WindowsNoEditor"
+$ServerPath = "C:\Users\Eng05\Desktop\CARLA_0.9.15\server\WindowsNoEditor"
+# $ServerPath = "C:\Users\User\Desktop\CARLA_Amur\WindowsNoEditor"
 $ExePath = Join-Path $ServerPath "CarlaUE4.exe"
 
 # Change the current working directory to the server folder

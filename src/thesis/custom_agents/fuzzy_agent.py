@@ -70,6 +70,7 @@ class FuzzyControlAgent(BasicAgent):
         }
 
         self._road_curvature_history = deque(maxlen=35)
+        self._curve_entry_speed = None
 
     def run_step(self, frame_ID: int) -> carla.VehicleControl:
         # Gather vehicle state data
@@ -78,8 +79,8 @@ class FuzzyControlAgent(BasicAgent):
         current_angle_diff = self._get_road_curvature(lookahead_steps=25)
         self._road_curvature_history.append(current_angle_diff)
 
-        # Set agent's target speed according to OpenDRIVE lane speed limits
-        self.set_target_speed(self._vehicle.get_speed_limit())
+        # Set agent's target speed
+        self._update_target_speed()
 
         # Adjust the local planner's "hit box" size based on speed and offset
         self._update_planner_lateral_lookahead(current_speed_kmh, abs(current_offset))
@@ -107,7 +108,7 @@ class FuzzyControlAgent(BasicAgent):
         longitudinal_accel = accel_vec.dot(fwd_vec)
 
         throttle_brake_control, control_contribution = (
-            self._longitudinal_controller.compute_control_command(
+            self._longitudinal_controller.compute_control_intent(
                 speed_error, longitudinal_accel
             )
         )
@@ -225,3 +226,23 @@ class FuzzyControlAgent(BasicAgent):
 
     def _get_vehicle_acceleration(self) -> float:
         pass
+
+    def _update_target_speed(self, CURVE_SPEED_LIMIT: float = 30.0) -> None:
+        CURVE_CHECK = self._check_road_curvature()
+        current_speed = get_speed(self._vehicle)
+
+        if CURVE_CHECK:
+            if self._curve_entry_speed is None:
+                # Speed latch to hold the speed upon entering the turn
+                self._curve_entry_speed = current_speed
+
+            # Set agent's target speed according to the minimum of either the hard-limit or the latched speed
+            curve_target_speed_limit = round(
+                min(CURVE_SPEED_LIMIT, self._curve_entry_speed), 0
+            )
+            self.set_target_speed(curve_target_speed_limit)
+        else:
+            self._curve_entry_speed = None
+            # Set agent's target speed according to OpenDRIVE lane speed limits
+            self.set_target_speed(self._vehicle.get_speed_limit())
+            # self.set_target_speed(80.0)

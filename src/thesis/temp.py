@@ -6,11 +6,11 @@ Architecture: Embedded Physics (Direct Mapping).
     - Physics: Non-Linear Plant dynamics encoded directly in Consequent MFs.
 """
 
+import carla
 import numpy as np
 import skfuzzy as fuzz
-from skfuzzy import control as ctrl
-import carla
 from agents.navigation.basic_agent import BasicAgent
+from skfuzzy import control as ctrl
 
 # ==============================================================================
 # 1. THE FUZZY LOGIC CONTROLLER
@@ -139,6 +139,53 @@ class HumanAgent(BasicAgent):
             control.brake = min(0.3, abs(float(control_val)))
 
         return control
+
+    self.control['brake_strong'] = fuzz.trapmf(self.control.universe, [-1, -1, -0.6, -0.3])
+
+        # 2. Light Brake (Light Friction / Drag Assist)
+        # Centered at -0.3. Maps to Brake 0.3 directly.
+        self.control['brake_light']  = fuzz.trimf(self.control.universe,  [-0.6, -0.3, 0.0])
+
+        # 3. Maintain (City Trim)
+        # Centered at +0.45 Throttle (Matches log data for ~20-30 km/h)
+        self.control['maintain']     = fuzz.trimf(self.control.universe,  [-0.3, 0.45, 0.60])
+
+        # 4. Light Accel (Highway Trim)
+        # Centered at +0.60 Throttle (Matches log data for ~90 km/h)
+        self.control['accel_light']  = fuzz.trimf(self.control.universe,  [0.45, 0.60, 0.80])
+
+        # 5. Strong Accel (Max Power)
+        self.control['accel_strong'] = fuzz.trapmf(self.control.universe, [0.60, 0.80, 1, 1])
+
+def _update_target_speed(self) -> None:
+        CURVE_CHECK = self._check_road_curvature()
+        current_speed = get_speed(self._vehicle)
+
+        if CURVE_CHECK:
+            # We are in a curve.
+
+            # 1. Have we latched a speed yet? If not, grab it NOW.
+            if self._curve_entry_speed is None:
+                self._curve_entry_speed = current_speed
+
+            # 2. Determine the limit
+            # We take the SMALLER of:
+            #  a) The hard 30km/h limit
+            #  b) The speed we had when we entered the turn
+            target_limit = min(30.0, self._curve_entry_speed)
+
+            # Set the target. This value is now FIXED for the duration of the turn.
+            # This prevents the "deceleration spiral."
+            self.set_target_speed(target_limit)
+
+        else:
+            # We are on a straight.
+
+            # 1. Reset the latch so it's ready for the next turn
+            self._curve_entry_speed = None
+
+            # 2. Resume normal speed limit
+            self.set_target_speed(self._vehicle.get_speed_limit())
 
 def inspect_output_contribution(self, final_output):
         """

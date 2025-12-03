@@ -31,7 +31,6 @@ from utils.helpers import (  # noqa: E402
     SpectatorCameraPositions,
     compute_client_fps,
     compute_server_fps,
-    compute_steering_deviations,
     draw_plan_waypoints,
     generate_custom_route,
     get_actor_display_name,
@@ -250,11 +249,11 @@ def main():
                 ego_control = EGO_AGENT.run_step()
 
                 # Compute lateral and heading deviations for monitoring
-                lateral_error, angular_error = compute_steering_deviations(EGO_AGENT)
-                if snapshot_frame_ID % 10 == 0:
-                    print(
-                        f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"
-                    )
+                # lateral_error, angular_error = compute_steering_deviations(EGO_AGENT)
+                # if snapshot_frame_ID % 10 == 0:
+                #     print(
+                #         f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"
+                #     )
 
                 # Update last applied steering
                 last_steer = ego_control.steer
