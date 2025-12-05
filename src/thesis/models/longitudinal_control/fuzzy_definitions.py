@@ -49,12 +49,10 @@ class FLC_FreeFlow:
         self.speed_error["Negative"] = fuzz.trapmf(
             x=self.speed_error.universe,
             abcd=[-10, -10, -3, 0],
-            # abcd=[-10, -10, -2, 0],
         )
         self.speed_error["Zero"] = fuzz.trimf(
             x=self.speed_error.universe,
-            # abc=[-3, 0, 2],
-            abc=[-2, 0, 2],
+            abc=[-3, 0, 2],
         )
         self.speed_error["Positive"] = fuzz.trapmf(
             x=self.speed_error.universe,
