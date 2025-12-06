@@ -77,7 +77,7 @@ def main():
     )
     DISPLAY_TELEMETRY = False  # Show telemetry info on vehicle
     DRAW_PLAN_WAYPOINTS = False  # Visualize local route plan
-    CUSTOM_ROUTE_NAVIGATION = False  # Use predefined route if True
+    CUSTOM_ROUTE_NAVIGATION = True  # Use predefined route if True
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors
     EGO_TIMEOUT = 2.5  # Pause duration at simulation start
@@ -98,8 +98,8 @@ def main():
     EGO_LANE_INVASION_SENSOR = None
 
     # Custom spawn point indices for defining a route in Town01_Opt
-    # EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
-    EGO_ROUTE_INDICES = [184, 182, 47, 36]
+    EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
+    # EGO_ROUTE_INDICES = [184, 182, 47, 36]
 
     try:
         # ----------------- Connect to CARLA Server -----------------
