@@ -633,7 +633,7 @@ def halt_vehicle(retain_steer: float = 0.0) -> carla.VehicleControl:
     """
     vehicle_control = carla.VehicleControl(
         throttle=0.0,
-        brake=0.5,
+        brake=0.3,
         steer=retain_steer,
         hand_brake=False,
         reverse=False,
