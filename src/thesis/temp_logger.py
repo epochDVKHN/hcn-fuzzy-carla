@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 """
 A dedicated data logger for thesis scenarios.
 

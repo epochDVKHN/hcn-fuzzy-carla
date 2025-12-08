@@ -131,7 +131,7 @@ class DataLogger:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        LOGGER.info(f"Simulation data saved to [{output_dir.resolve()}].")
+        LOGGER.info(f"Simulation results saved to [{output_dir.resolve()}].")
 
         # Time Series
         ts_path = output_dir / f"{file_prefix}_timeseries.csv"

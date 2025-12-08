@@ -233,8 +233,13 @@ class FuzzyControlAgent(BasicAgent):
 
         if CURVE_CHECK:
             if self._curve_entry_speed is None:
-                # Speed latch to hold the speed upon entering the turn
-                self._curve_entry_speed = current_speed
+                # No latched value yet: determine initial speed for curve entry
+                if current_speed < 1.0:
+                    # Starting from rest — use the curve limit to avoid latching to zero
+                    self._curve_entry_speed = CURVE_SPEED_LIMIT
+                else:
+                    # Already moving — latch current speed to avoid oscillatory slowdown
+                    self._curve_entry_speed = current_speed
 
             # Set agent's target speed according to the minimum of either the hard-limit or the latched speed
             curve_target_speed_limit = round(

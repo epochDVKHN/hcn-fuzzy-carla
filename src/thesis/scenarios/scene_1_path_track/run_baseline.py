@@ -77,7 +77,7 @@ def main():
         0.02  # Client-side sleep to improve FPS, recommended range [0.02–0.04] seconds
     )
     DISPLAY_TELEMETRY = False  # Show telemetry info on vehicle
-    DRAW_PLAN_WAYPOINTS = False  # Visualize local route plan
+    DRAW_PLAN_WAYPOINTS = True  # Visualize local route plan
     CUSTOM_ROUTE_NAVIGATION = True  # Use predefined route if True
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors

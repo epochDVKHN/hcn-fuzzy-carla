@@ -28,6 +28,7 @@ from utils.helpers import (  # noqa: E402
     world_actor_cleanup,
     world_snapshot_tick,
 )
+from utils.logger import DataLogger  # noqa: E402
 from utils.sensors import (  # noqa: E402
     CollisionSensor,
     GNSSSensor,
@@ -45,7 +46,7 @@ def main():
     SERVER_TIMEOUT = 10.0
     CLIENT_DELTA_SLEEP = 0.02  # Client-side sleep to improve visualization smoothness, recommended range [0.02–0.04] seconds
     DISPLAY_TELEMETRY = False  # Show telemetry info on vehicle
-    DRAW_PLAN_WAYPOINTS = False  # Visualize local route plan
+    DRAW_PLAN_WAYPOINTS = True  # Visualize local route plan
     CUSTOM_ROUTE_NAVIGATION = True  # Use predefined route if True
     VEHICLE_LIST = []  # Track spawned vehicles
     SENSOR_LIST = []  # Track spawned sensors
@@ -69,6 +70,10 @@ def main():
     # Custom spawn point indices for defining a route in Town01_Opt
     EGO_ROUTE_INDICES = [118, 141, 78, 173, 227, 15, 0, 140, 16, 129, 96, 119, 88]
     # EGO_ROUTE_INDICES = [184, 182, 47, 36]
+
+    # Data logging
+    LOG_PATH = PROJECT_ROOT / "data" / "outputs" / "raw" / "scene_1_path_track"
+    LOG_PREFIX = "fuzzy"
 
     try:
         # ----------------- Connect to CARLA Server -----------------
@@ -115,7 +120,7 @@ def main():
         # Wait briefly to ensure the world state stabilizes
         world_snapshot_tick(world)
 
-        # ----------------- Ego vehicle sensors -----------------
+        # ------------ Ego vehicle sensors and logging ------------
         EGO_COLLISION_SENSOR = CollisionSensor(EGO_VEHICLE)
         EGO_GNSS_SENSOR = GNSSSensor(EGO_VEHICLE)
         EGO_IMU_SENSOR = IMUSensor(EGO_VEHICLE)
@@ -127,6 +132,13 @@ def main():
                 EGO_IMU_SENSOR.sensor,
                 EGO_LANE_INVASION_SENSOR.sensor,
             ]
+        )
+        DATA_LOGGER = DataLogger(
+            vehicle=EGO_VEHICLE,
+            imu_sensor=EGO_IMU_SENSOR,
+            collision_sensor=EGO_COLLISION_SENSOR,
+            lane_invasion_sensor=EGO_LANE_INVASION_SENSOR,
+            gnss_sensor=EGO_GNSS_SENSOR,
         )
         world_snapshot_tick(world)
 
@@ -218,12 +230,8 @@ def main():
                 # Compute control commands for this step
                 ego_control = EGO_AGENT.run_step(snapshot_frame_ID)
 
-                # Compute lateral and heading deviations for monitoring
-                # lateral_error, angular_error = compute_steering_deviations(EGO_AGENT)
-                # if snapshot_frame_ID % 10 == 0:
-                #     print(
-                #         f"Lateral error: {lateral_error:.2f} | Angular error: {angular_error:.2f} | Steer: {ego_control.steer:.2f}"
-                #     )
+                # Record simulation data for this step
+                DATA_LOGGER.tick(world, ego_control)
 
                 # Update last applied steering
                 last_steer = ego_control.steer
@@ -265,6 +273,10 @@ def main():
             SYNCHRONOUS = False
             LOGGER.debug("Synchronous mode disabled.")
             server_fps = "Variable"
+
+        # Save recorded simulation data
+        if "DATA_LOGGER" in locals():
+            DATA_LOGGER.save(LOG_PATH, LOG_PREFIX)
 
         # Clean up all actors
         world_actor_cleanup(world)
