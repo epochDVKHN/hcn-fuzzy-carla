@@ -1,9 +1,9 @@
 1) CARLA version 0.9.15
 2) Installed the Build version first, then resorted back to package installation due to simplicity. Do not waste time trying to build from source on Windows. It is much easier on Ubuntu. If the requirements are to create new assets or maps, then only choose the build version, else the packaged installation is good enough (this works on both Windows and Ubuntu).
-3) Use Python 3.10.16
+3) Using Python 3.10.19
 
 Procedures:
-1) Install Miniconda (or Anaconda, but Miniconda is more lighter) (any version supporting Python 3.10.16 will do). In this case, Miniconda 25.1.1 was used (Can choose between single user or for all users installation, for this project, for all was used, recommended and default installation options).
+1) Install Miniconda (or Anaconda, but Miniconda is more lighter) (any version supporting Python 3.10.19 will do). In this case, Miniconda 25.1.1 was used (Can choose between single user or for all users installation, for this project, for all was used, recommended and default installation options).
 2) Remember to always use Anaconda prompt (https://stackoverflow.com/questions/78886970/how-to-add-anaconda-prompt-option-to-windows-terminal)
 	Adds Anaconda Prompt to the Windows CMD (to simplify operations)
 3) Install IDE (any, in this case VS Code, default and recommended options).

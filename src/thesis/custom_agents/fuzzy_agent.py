@@ -228,10 +228,10 @@ class FuzzyControlAgent(BasicAgent):
         pass
 
     def _update_target_speed(self, CURVE_SPEED_LIMIT: float = 30.0) -> None:
-        CURVE_CHECK = self._check_road_curvature()
+        curve_check = self._check_road_curvature()
         current_speed = get_speed(self._vehicle)
 
-        if CURVE_CHECK:
+        if curve_check:
             if self._curve_entry_speed is None:
                 # No latched value yet: determine initial speed for curve entry
                 if current_speed < 1.0:
