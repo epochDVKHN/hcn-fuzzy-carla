@@ -15,7 +15,7 @@ $ExePath = Join-Path $ServerPath "CarlaUE4.exe"
 Set-Location $ServerPath
 
 # Launch the CARLA server with the specified command-line arguments
-Start-Process $ExePath -ArgumentList "-windowed", "-ResX=820", "-ResY=600", "-quality-level=Low", "-dx12", "-prefernvidia"
+Start-Process $ExePath -ArgumentList "-windowed", "-ResX=820", "-ResY=600", "-quality-level=Epic", "-dx12", "-prefernvidia"
 
 # Command-line argument options:
 # - "-windowed"        : Run in windowed mode (replace with "-fullscreen" for fullscreen)

@@ -241,7 +241,7 @@ def main():
             # Update spectator camera to follow ego vehicle
             spectator_transform = set_spectator_camera(
                 EGO_VEHICLE,
-                SpectatorCameraPositions.LOW_ANGLE_CHASE_VIEW,
+                SpectatorCameraPositions.HIGH_ANGLE_CHASE_VIEW,
             )
             spectator.set_transform(spectator_transform)
 
@@ -305,8 +305,8 @@ def main():
             server_fps = "Variable"
 
         # Save recorded simulation data
-        if "DATA_LOGGER" in locals():
-            DATA_LOGGER.save(LOG_PATH, LOG_PREFIX)
+        # if "DATA_LOGGER" in locals():
+        #     DATA_LOGGER.save(LOG_PATH, LOG_PREFIX)
 
         # Clean up all actors
         world_actor_cleanup(world)
